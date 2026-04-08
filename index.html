@@ -1,0 +1,2116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFG ↔ PDA · Formal Language Converter</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Fraunces:ital,wght@0,300;0,600;0,900;1,300;1,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --ink:#0d0f14;--paper:#f5f0e8;--paper2:#ede8dc;--paper3:#e4ddd0;
+  --rule:#c8bfaa;--rule2:#a89f8c;
+  --accent:#c0392b;--accent2:#e67e22;--accent3:#2980b9;--accent4:#27ae60;
+  --cfg-col:#8b1a1a;--pda-col:#1a3a5c;
+  --mono:'IBM Plex Mono',monospace;--serif:'Fraunces',serif;
+  --sh:0 2px 12px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.08);
+  --sh2:0 8px 32px rgba(0,0,0,.15),0 2px 8px rgba(0,0,0,.1);
+}
+html{scroll-behavior:smooth;}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);min-height:100vh;position:relative;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,0,0,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.035) 1px,transparent 1px);
+  background-size:40px 40px;z-index:0;}
+
+header{position:sticky;top:0;z-index:200;background:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:58px;box-shadow:0 2px 20px rgba(0,0,0,.4);}
+.logo{font-family:var(--mono);font-size:.9rem;font-weight:600;color:var(--paper);letter-spacing:.04em;display:flex;align-items:center;gap:.5rem;}
+.logo-cfg{color:#e8a87c;}.logo-sep{color:#555;font-size:1.1rem;}.logo-pda{color:#7eb8e8;}
+.logo-sub{color:rgba(255,255,255,.25);font-weight:300;margin-left:.3rem;}
+.mode-switch{display:flex;background:rgba(255,255,255,.06);border-radius:8px;padding:3px;gap:3px;}
+.mode-btn{padding:.38rem 1.1rem;border-radius:6px;border:none;font-family:var(--mono);font-size:.78rem;font-weight:500;cursor:pointer;transition:all .22s;background:transparent;color:rgba(255,255,255,.45);letter-spacing:.03em;}
+.mode-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 10px rgba(192,57,43,.4);}
+.hdr-r{font-family:var(--mono);font-size:.68rem;color:rgba(255,255,255,.25);letter-spacing:.07em;}
+
+main{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:2rem 2rem 4rem;}
+
+.conv-grid{display:grid;grid-template-columns:340px 1fr;gap:1.5rem;margin-top:1.5rem;}
+@media(max-width:900px){.conv-grid{grid-template-columns:1fr;}}
+
+.panel{background:var(--paper2);border:1.5px solid var(--rule);border-radius:14px;box-shadow:var(--sh);overflow:hidden;}
+.panel-hd{background:var(--ink);padding:.7rem 1.2rem;display:flex;align-items:center;justify-content:space-between;}
+.panel-title{font-family:var(--mono);font-size:.75rem;font-weight:600;color:var(--paper);letter-spacing:.08em;text-transform:uppercase;}
+.panel-badge{font-family:var(--mono);font-size:.65rem;padding:.18rem .55rem;border-radius:4px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);}
+.panel-body{padding:1.2rem;}
+
+.input-col{display:flex;flex-direction:column;gap:1.2rem;}
+.output-col{display:flex;flex-direction:column;gap:1.2rem;}
+
+.ex-label{font-family:var(--mono);font-size:.64rem;color:var(--rule2);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.35rem;}
+.ex-pills{display:flex;flex-wrap:wrap;gap:.38rem;}
+.ex-pill{font-family:var(--mono);font-size:.72rem;padding:.28rem .65rem;border-radius:5px;background:var(--paper3);border:1px solid var(--rule);color:var(--ink);cursor:pointer;transition:all .18s;font-weight:500;}
+.ex-pill:hover{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+
+.fl{font-family:var(--mono);font-size:.64rem;color:var(--rule2);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:.28rem;font-weight:600;}
+textarea{width:100%;font-family:var(--mono);font-size:.82rem;background:var(--paper);border:1.5px solid var(--rule);border-radius:9px;padding:.85rem 1rem;color:var(--ink);line-height:1.8;resize:vertical;outline:none;transition:border-color .2s;min-height:110px;}
+textarea:focus{border-color:var(--accent);}
+input[type=text]{width:100%;font-family:var(--mono);font-size:.79rem;background:var(--paper);border:1.5px solid var(--rule);border-radius:7px;padding:.5rem .75rem;color:var(--ink);outline:none;transition:border-color .2s;}
+input[type=text]:focus{border-color:var(--accent);}
+.hint{font-family:var(--mono);font-size:.67rem;color:var(--rule2);margin-top:.4rem;line-height:1.5;}
+
+.pda-fields{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;}
+.field-g{display:flex;flex-direction:column;}
+
+.ptr-hd{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 28px;gap:.4rem;margin-bottom:.3rem;}
+.ptr-hd span{font-family:var(--mono);font-size:.62rem;color:var(--rule2);font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding-left:.25rem;}
+.tr-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 28px;gap:.4rem;margin-bottom:.38rem;align-items:center;}
+.tr-row input{font-size:.74rem;padding:.4rem .5rem;}
+.del-btn{width:28px;height:28px;border-radius:6px;border:none;background:rgba(192,57,43,.1);color:var(--accent);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .18s;flex-shrink:0;}
+.del-btn:hover{background:rgba(192,57,43,.2);}
+.insert-row-btn{display:flex;align-items:center;justify-content:center;width:100%;height:16px;background:none;border:none;cursor:pointer;opacity:0;transition:opacity .15s;position:relative;}
+.insert-row-btn::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:var(--accent4);opacity:.4;}
+.insert-row-btn span{background:var(--paper2);border:1.5px solid var(--accent4);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.75rem;font-weight:700;color:var(--accent4);position:relative;z-index:1;line-height:1;}
+.insert-row-btn:hover{opacity:1 !important;}
+#pda-rows:hover .insert-row-btn{opacity:.45;}
+#pda-rows .insert-row-btn:hover{opacity:1;}
+.add-tr-btn{font-family:var(--mono);font-size:.72rem;font-weight:600;padding:.38rem .8rem;border-radius:7px;border:1.5px dashed var(--rule);background:transparent;color:var(--rule2);cursor:pointer;transition:all .18s;margin-top:.3rem;}
+.add-tr-btn:hover{border-color:var(--accent4);color:var(--accent4);}
+
+.convert-btn{width:100%;padding:.95rem;background:var(--ink);color:var(--paper);border:none;border-radius:10px;font-family:var(--mono);font-size:.86rem;font-weight:600;letter-spacing:.06em;cursor:pointer;transition:all .22s;}
+.convert-btn:hover{background:#1a1f2e;transform:translateY(-1px);box-shadow:var(--sh2);}
+.convert-btn:active{transform:translateY(0);}
+
+.err-box{background:rgba(192,57,43,.08);border:1.5px solid rgba(192,57,43,.25);border-radius:8px;padding:.65rem .9rem;font-family:var(--mono);font-size:.78rem;color:var(--accent);margin-top:.8rem;}
+.ok-tag{display:inline-flex;align-items:center;gap:.35rem;background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);color:var(--accent4);padding:.22rem .6rem;border-radius:5px;font-family:var(--mono);font-size:.68rem;font-weight:600;}
+
+.sec-hd{display:flex;align-items:center;gap:.7rem;margin-bottom:.7rem;}
+.sec-tag{font-family:var(--mono);font-size:.64rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:.2rem .6rem;border-radius:4px;}
+.sec-tag.cfg{background:rgba(139,26,26,.1);color:var(--cfg-col);}
+.sec-tag.pda{background:rgba(26,58,92,.1);color:var(--pda-col);}
+.sec-line{flex:1;height:1px;background:var(--rule);}
+
+.steps-flow{display:flex;flex-direction:column;gap:.65rem;}
+.step-item{background:var(--paper);border:1.5px solid var(--rule);border-radius:10px;overflow:hidden;animation:slideUp .3s ease both;}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.step-hd{display:flex;align-items:center;gap:.7rem;padding:.68rem 1rem;cursor:pointer;background:var(--paper2);border-bottom:1.5px solid transparent;transition:background .18s;}
+.step-hd:hover{background:var(--paper3);}
+.step-item.open .step-hd{border-bottom-color:var(--rule);}
+.step-num{width:23px;height:23px;border-radius:50%;flex-shrink:0;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:.67rem;font-weight:600;display:flex;align-items:center;justify-content:center;}
+.step-label{font-family:var(--mono);font-size:.77rem;font-weight:600;flex:1;color:var(--ink);}
+.step-chev{font-size:.68rem;color:var(--rule2);transition:transform .2s;}
+.step-item.open .step-chev{transform:rotate(180deg);}
+.step-content{display:none;padding:.9rem 1rem;}
+.step-item.open .step-content{display:block;}
+.step-desc{font-size:.83rem;color:#444;line-height:1.65;margin-bottom:.75rem;font-family:var(--serif);}
+
+/* rule cards — the main production display */
+.rules-grid{display:flex;flex-direction:column;gap:.38rem;}
+.rule-card{display:flex;align-items:center;flex-wrap:wrap;background:var(--paper2);border:1px solid var(--rule);border-radius:7px;padding:.42rem .8rem;font-family:var(--mono);font-size:.82rem;animation:fadeIn .25s ease both;gap:.25rem;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.r-lhs{color:var(--cfg-col);font-weight:700;}
+.r-arr{color:var(--rule2);}
+.r-rhs .nt{color:var(--cfg-col);font-weight:700;}
+.r-rhs .t{color:#a04000;font-weight:600;}
+.r-rhs .ep{color:var(--accent4);font-weight:600;font-style:italic;}
+.r-src{font-size:.63rem;color:var(--rule2);margin-left:auto;padding-left:.5rem;border-left:1px solid var(--rule);}
+
+.tr-card{display:flex;align-items:center;flex-wrap:wrap;background:var(--paper2);border:1px solid var(--rule);border-radius:7px;padding:.42rem .8rem;font-family:var(--mono);font-size:.8rem;animation:fadeIn .25s ease both;gap:.28rem;}
+.tr-st{background:rgba(41,128,185,.12);color:var(--pda-col);padding:.07rem .38rem;border-radius:4px;font-weight:700;}
+.tr-in{background:rgba(160,64,0,.1);color:#a04000;padding:.07rem .38rem;border-radius:4px;}
+.tr-sk{background:rgba(39,174,96,.1);color:#1a6b40;padding:.07rem .38rem;border-radius:4px;}
+.tr-arr{color:var(--rule2);font-size:.85rem;}
+.tr-nx{background:rgba(41,128,185,.12);color:var(--pda-col);padding:.07rem .38rem;border-radius:4px;font-weight:700;}
+.tr-pu{background:rgba(192,57,43,.1);color:var(--accent);padding:.07rem .38rem;border-radius:4px;}
+
+.stack-vis{display:flex;align-items:flex-end;gap:1.2rem;margin:.6rem 0;flex-wrap:wrap;}
+.stk-box{display:flex;flex-direction:column;align-items:center;gap:.3rem;}
+.stk-lbl{font-family:var(--mono);font-size:.61rem;color:var(--rule2);letter-spacing:.05em;text-transform:uppercase;}
+.stk-cells{display:flex;flex-direction:column;}
+.sc{width:76px;padding:.3rem .35rem;border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.77rem;font-weight:600;}
+.sc:first-child{border-radius:6px 6px 0 0;}
+.sc:last-child{border-radius:0 0 6px 6px;}
+.sc:only-child{border-radius:6px;}
+.sc+.sc{border-top:none;}
+.sc-nt{background:rgba(139,26,26,.08);color:var(--cfg-col);}
+.sc-t{background:rgba(160,64,0,.07);color:#a04000;}
+.sc-z0{background:rgba(41,128,185,.07);color:var(--pda-col);}
+.sc-empty{background:rgba(39,174,96,.06);color:var(--accent4);font-style:italic;}
+/* ── GNF / Animation styles ── */
+.gnf-step{background:var(--paper2);border:1.5px solid var(--rule);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;}
+.gnf-tag{font-family:var(--mono);font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.15rem .45rem;border-radius:3px;background:rgba(41,128,185,.1);color:var(--pda-col);margin-right:.5rem;}
+.gnf-rule-row{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-family:var(--mono);font-size:.8rem;padding:.22rem 0;}
+.gnf-nt{color:var(--cfg-col);font-weight:700;}
+.gnf-t{color:#a04000;font-weight:600;}
+.gnf-arr{color:var(--rule2);}
+
+/* Delta notation box */
+.delta-box{background:var(--paper);border:1.5px solid var(--rule);border-radius:10px;overflow:hidden;margin-top:.6rem;}
+.delta-box-hd{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:.67rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:.45rem .85rem;}
+.delta-rows{padding:.55rem .85rem;display:flex;flex-direction:column;gap:.28rem;max-height:240px;overflow-y:auto;}
+.delta-line{font-family:var(--mono);font-size:.78rem;padding:.2rem 0;border-bottom:1px solid var(--rule);color:var(--ink);}
+.delta-line:last-child{border-bottom:none;}
+.delta-fn{color:var(--pda-col);font-weight:700;}
+.delta-state{background:rgba(41,128,185,.12);color:var(--pda-col);padding:.04rem .32rem;border-radius:3px;font-weight:700;}
+.delta-inp{background:rgba(160,64,0,.1);color:#a04000;padding:.04rem .32rem;border-radius:3px;}
+.delta-stk{background:rgba(39,174,96,.1);color:#1a6b40;padding:.04rem .32rem;border-radius:3px;}
+.delta-push{background:rgba(192,57,43,.1);color:var(--accent);padding:.04rem .32rem;border-radius:3px;}
+.delta-sep{color:var(--rule2);}
+
+/* ── Stack animation ── */
+.anim-panel{background:var(--paper2);border:1.5px solid var(--rule);border-radius:10px;padding:.9rem 1rem;margin-top:.6rem;}
+.anim-ctrl{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.85rem;}
+.anim-ctrl label{font-family:var(--mono);font-size:.67rem;color:var(--rule2);font-weight:600;letter-spacing:.05em;text-transform:uppercase;}
+.anim-ctrl input[type=text]{width:130px;}
+.anim-btn{font-family:var(--mono);font-size:.72rem;font-weight:600;padding:.38rem .8rem;border-radius:7px;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink);cursor:pointer;transition:all .18s;}
+.anim-btn:hover{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.anim-btn.run{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.anim-btn.run:hover{background:#2c3e50;}
+.anim-main{display:flex;gap:1.2rem;align-items:flex-start;flex-wrap:wrap;}
+.anim-stack-wrap{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0;}
+.anim-stack-lbl{font-family:var(--mono);font-size:.61rem;color:var(--rule2);letter-spacing:.05em;text-transform:uppercase;}
+.anim-stack{display:flex;flex-direction:column;min-height:180px;justify-content:flex-end;width:88px;gap:2px;}
+.anim-cell{height:34px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.82rem;font-weight:600;border:1.5px solid transparent;transition:all .28s cubic-bezier(.4,0,.2,1);}
+.anim-cell.var{background:rgba(139,26,26,.1);color:var(--cfg-col);border-color:rgba(139,26,26,.2);}
+.anim-cell.z0{background:rgba(41,128,185,.1);color:var(--pda-col);border-color:rgba(41,128,185,.2);}
+.anim-cell.term{background:rgba(160,64,0,.09);color:#a04000;border-color:rgba(160,64,0,.25);}
+.anim-cell.enter{animation:cellEnter .28s cubic-bezier(.4,0,.2,1) both;}
+.anim-cell.exit{animation:cellExit .22s ease-in both;}
+@keyframes cellEnter{from{opacity:0;transform:translateY(-18px) scale(.85);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes cellExit{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(.7);}}
+.anim-stack-base{height:4px;border-radius:2px;background:var(--rule);width:88px;}
+.anim-trace{flex:1;min-width:200px;display:flex;flex-direction:column;gap:.32rem;max-height:280px;overflow-y:auto;}
+.anim-log{font-family:var(--mono);font-size:.74rem;padding:.32rem .65rem;border-radius:6px;border:1px solid var(--rule);display:flex;align-items:center;gap:.5rem;}
+.anim-log.push{background:rgba(139,26,26,.06);border-color:rgba(139,26,26,.15);color:var(--cfg-col);}
+.anim-log.pop{background:rgba(41,128,185,.06);border-color:rgba(41,128,185,.15);color:var(--pda-col);}
+.anim-log.match{background:rgba(39,174,96,.06);border-color:rgba(39,174,96,.15);color:var(--accent4);}
+.anim-log.info{background:rgba(0,0,0,.03);color:var(--ink);}
+.anim-log.accept{background:rgba(39,174,96,.14);border-color:rgba(39,174,96,.35);color:var(--accent4);font-weight:700;}
+.anim-log.reject{background:rgba(192,57,43,.1);border-color:rgba(192,57,43,.25);color:var(--accent);font-weight:700;}
+.anim-log.cur{box-shadow:0 0 0 2px var(--accent);}
+.anim-state-badge{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:.72rem;padding:.22rem .65rem;border-radius:20px;border:1.5px solid var(--rule);background:var(--paper2);color:var(--rule2);transition:all .22s;}
+.anim-state-badge.active{background:rgba(39,174,96,.1);color:var(--accent4);border-color:rgba(39,174,96,.35);}
+.anim-head-wrap{display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem;flex-wrap:wrap;}
+.tape-cell{display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;font-family:var(--mono);font-size:.78rem;border:1.5px solid var(--rule);border-radius:4px;background:var(--paper);transition:all .22s;}
+.tape-cell.head{background:rgba(192,57,43,.12);border-color:rgba(192,57,43,.4);color:var(--accent);font-weight:700;}
+.tape-cell.done{background:var(--paper3);color:var(--rule2);}
+
+.stk-arrow{color:var(--rule);font-size:1.3rem;align-self:center;margin-bottom:8px;}
+
+.result-wrap{border:1.5px solid var(--rule);border-radius:10px;overflow:hidden;margin-top:.6rem;max-height:300px;overflow-y:auto;}
+.result-wrap table{width:100%;border-collapse:collapse;}
+.result-wrap th{position:sticky;top:0;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:.67rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:.5rem .85rem;text-align:left;}
+.result-wrap td{font-family:var(--mono);font-size:.75rem;padding:.48rem .85rem;border-bottom:1px solid var(--rule);vertical-align:middle;}
+.result-wrap tr:last-child td{border-bottom:none;}
+.result-wrap tr:hover td{background:var(--paper2);}
+.td-lhs{color:var(--cfg-col);font-weight:700;}
+.td-st{color:var(--pda-col);font-weight:700;}
+.td-in{color:#a04000;}
+.td-sk{color:#1a6b40;}
+.td-nx{color:var(--pda-col);font-weight:700;}
+.td-pu{color:var(--accent);}
+
+.diagram-wrap{background:var(--paper);border:1.5px solid var(--rule);border-radius:12px;overflow:hidden;}
+.diagram-hd{display:flex;align-items:center;justify-content:space-between;padding:.6rem 1.1rem;background:var(--paper2);border-bottom:1.5px solid var(--rule);}
+.diagram-title{font-family:var(--mono);font-size:.71rem;font-weight:600;color:var(--ink);letter-spacing:.05em;text-transform:uppercase;}
+.diagram-sub{font-family:var(--mono);font-size:.63rem;color:var(--rule2);}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:240px;gap:.7rem;color:var(--rule2);}
+.empty-state .big{font-size:2.8rem;opacity:.25;}
+.empty-state p{font-family:var(--mono);font-size:.77rem;letter-spacing:.04em;}
+
+.info-box{background:rgba(41,128,185,.06);border:1px solid rgba(41,128,185,.18);border-radius:7px;padding:.6rem .85rem;font-family:var(--serif);font-size:.82rem;color:#2c4a6e;line-height:1.6;}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin:.4rem 0;}
+.summary-cell{background:var(--paper2);border:1.5px solid var(--rule);border-radius:10px;padding:.9rem;text-align:center;}
+.summary-big{font-size:2rem;font-weight:900;font-family:var(--serif);}
+.summary-sub{font-family:var(--mono);font-size:.66rem;color:var(--rule2);margin-top:.15rem;}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px;}
+
+/* D3 */
+.node-g circle{cursor:pointer;}
+.edge-path{fill:none;stroke:#aaa;stroke-width:1.7;}
+.edge-label-bg{fill:var(--paper);stroke:var(--rule);stroke-width:1;}
+.edge-label{font-family:'IBM Plex Mono',monospace;font-size:8px;fill:#444;}
+#tooltip{position:fixed;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:.72rem;padding:.4rem .7rem;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);}
+
+/* ── THEORY TAB ── */
+.theory-wrap{max-width:900px;margin:0 auto;padding:2.2rem 0 4rem;}
+.theory-hero{margin-bottom:2.5rem;}
+.theory-hero h1{font-family:var(--serif);font-size:clamp(1.8rem,3vw,2.6rem);font-weight:900;letter-spacing:-.03em;line-height:1.15;margin-bottom:.6rem;}
+.theory-hero h1 em{font-style:italic;color:var(--cfg-col);}
+.theory-hero p{font-family:var(--serif);font-size:1rem;color:#555;line-height:1.72;max-width:640px;}
+.theory-section{margin-bottom:2.2rem;}
+.theory-section-title{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);padding:.3rem 0 .3rem .7rem;border-left:3px solid var(--ink);margin-bottom:1rem;}
+.theory-card{background:var(--paper2);border:1.5px solid var(--rule);border-radius:12px;padding:1.3rem 1.5rem;margin-bottom:1rem;}
+.theory-card h3{font-family:var(--mono);font-size:.82rem;font-weight:700;margin-bottom:.6rem;color:var(--ink);}
+.theory-card p{font-family:var(--serif);font-size:.9rem;color:#444;line-height:1.7;margin-bottom:.5rem;}
+.theory-card p:last-child{margin-bottom:0;}
+.theory-card ul{list-style:none;display:flex;flex-direction:column;gap:.35rem;margin-top:.4rem;}
+.theory-card ul li{font-family:var(--serif);font-size:.88rem;color:#444;line-height:1.6;padding-left:1.2rem;position:relative;}
+.theory-card ul li::before{content:'›';position:absolute;left:0;color:var(--rule2);font-family:var(--mono);}
+.theory-formula{background:var(--paper);border:1.5px solid var(--rule);border-radius:8px;padding:.7rem 1rem;margin:.6rem 0;font-family:var(--mono);font-size:.83rem;line-height:2;}
+.theory-formula .kw{color:var(--cfg-col);font-weight:700;}
+.theory-formula .sym{color:var(--pda-col);font-weight:600;}
+.theory-formula .cmt{color:var(--rule2);font-size:.75rem;}
+.theory-formula .t{color:#a04000;font-weight:600;}
+.theory-formula .ep{color:var(--accent4);font-style:italic;}
+.theory-two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(max-width:680px){.theory-two-col{grid-template-columns:1fr;}}
+.theory-tag{display:inline-block;font-family:var(--mono);font-size:.64rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.18rem .5rem;border-radius:4px;margin-bottom:.6rem;}
+.theory-tag.cfg{background:rgba(139,26,26,.1);color:var(--cfg-col);}
+.theory-tag.pda{background:rgba(26,58,92,.1);color:var(--pda-col);}
+.theory-tag.thm{background:rgba(39,174,96,.1);color:var(--accent4);}
+.theory-divider{height:1px;background:var(--rule);margin:2rem 0;}
+.algo-step{display:flex;gap:.9rem;align-items:flex-start;padding:.75rem 0;border-bottom:1px solid var(--rule);}
+.algo-step:last-child{border-bottom:none;}
+.algo-step-num{width:26px;height:26px;border-radius:50%;flex-shrink:0;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:.68rem;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:.1rem;}
+.algo-step-body{flex:1;}
+.algo-step-body strong{font-family:var(--mono);font-size:.78rem;font-weight:700;display:block;margin-bottom:.25rem;}
+.algo-step-body p{font-family:var(--serif);font-size:.86rem;color:#444;line-height:1.6;}
+.equiv-banner{background:var(--ink);color:var(--paper);border-radius:12px;padding:1.2rem 1.5rem;display:flex;align-items:center;gap:1.2rem;margin:1.5rem 0;}
+.equiv-banner .big-sym{font-family:var(--serif);font-size:2rem;font-weight:900;color:#e8a87c;flex-shrink:0;}
+.equiv-banner p{font-family:var(--serif);font-size:.9rem;line-height:1.65;color:rgba(245,240,232,.8);}
+.equiv-banner strong{color:var(--paper);}
+.theory-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.78rem;margin-top:.6rem;}
+.theory-table th{background:var(--ink);color:var(--paper);padding:.5rem .8rem;text-align:left;font-size:.67rem;letter-spacing:.06em;text-transform:uppercase;}
+.theory-table td{padding:.55rem .8rem;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.5;}
+.theory-table tr:last-child td{border-bottom:none;}
+.theory-table tr:hover td{background:var(--paper3);}
+</style>
+</head>
+<body>
+<div id="tooltip"></div>
+
+<header>
+  <div class="logo">
+    <span class="logo-cfg">CFG</span>
+    <span class="logo-sep">&#8652;</span>
+    <span class="logo-pda">PDA</span>
+    <span class="logo-sub">Formal Language Converter</span>
+  </div>
+  <div class="mode-switch">
+    <button class="mode-btn active" id="btn-cfg" onclick="setMode('cfg')">CFG &#8594; PDA</button>
+    <button class="mode-btn" id="btn-pda" onclick="setMode('pda')">PDA &#8594; CFG</button>
+    <button class="mode-btn" id="btn-theory" onclick="setMode('theory')">Theory</button>
+  </div>
+  <div class="hdr-r">AUTOMATA THEORY</div>
+</header>
+
+<main>
+<!-- ═══ CFG → PDA ═══ -->
+<div id="sec-cfg">
+  <div class="conv-grid">
+    <div class="input-col">
+      <div class="panel">
+        <div class="panel-hd"><span class="panel-title">Grammar Input</span><span class="panel-badge">CFG</span></div>
+        <div class="panel-body">
+          <div class="ex-label">Examples</div>
+          <div class="ex-pills">
+            <button class="ex-pill" onclick="loadCFG('anbn')">a&#8319;b&#8319;</button>
+            <button class="ex-pill" onclick="loadCFG('wwr')">Palindrome</button>
+            <button class="ex-pill" onclick="loadCFG('equal')">#a = #b</button>
+            <button class="ex-pill" onclick="loadCFG('dyck')">Dyck (aⁿbⁿ pairs)</button>
+          </div>
+          <div style="margin-top:.9rem">
+            <label class="fl">Productions</label>
+            <textarea id="cfg-input" rows="6" placeholder="S -> aSb | eps&#10;A -> aAb | eps&#10;&#10;Spaces optional: S->aSb is fine&#10;eps or &#949; = epsilon"></textarea>
+            <div class="hint" style="line-height:1.75">
+              One rule per line &nbsp;&#183;&nbsp; <code style="font-family:var(--mono);color:var(--cfg-col)">|</code> for alternation<br>
+              <b>Uppercase</b> = non-terminal &nbsp;&#183;&nbsp; <b>lowercase</b> = terminal<br>
+              Spaces are <em>optional</em>: <code style="font-family:var(--mono)">S->aSb</code> and <code style="font-family:var(--mono)">S -> a S b</code> are equivalent<br>
+              <code style="font-family:var(--mono);color:var(--accent4)">eps</code> or <code style="font-family:var(--mono);color:var(--accent4)">&#949;</code> = empty string (epsilon)
+            </div>
+            <div style="margin-top:.5rem;padding:.38rem .7rem;background:rgba(139,26,26,.07);border:1px solid rgba(139,26,26,.2);border-radius:6px;font-family:var(--mono);font-size:.7rem;color:var(--cfg-col)">
+              &#9432; Start symbol must be <b>S</b> &nbsp;&#183;&nbsp; First rule's LHS must be S
+            </div>
+          </div>
+          <button class="convert-btn" style="margin-top:1rem" onclick="runCFGtoPDA()">Convert CFG &#8594; PDA &nbsp;&#8250;</button>
+          <div id="cfg-err" class="err-box" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+    <div class="output-col">
+      <div id="cfg-empty" class="panel">
+        <div class="panel-hd"><span class="panel-title">Conversion Output</span><span class="panel-badge">PDA</span></div>
+        <div class="panel-body"><div class="empty-state"><div class="big">&#8674;</div><p>Enter a CFG and click Convert</p></div></div>
+      </div>
+      <div id="cfg-out" style="display:none">
+        <div class="sec-hd"><span class="sec-tag cfg">Step-by-Step</span><div class="sec-line"></div><span id="cfg-ok" class="ok-tag" style="display:none">&#10003; Complete</span></div>
+        <div id="cfg-steps" class="steps-flow"></div>
+        <div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag pda">All Transitions</span><div class="sec-line"></div></div>
+        <div class="result-wrap"><table><thead><tr><th>#</th><th>From</th><th>Input</th><th>Stack</th><th></th><th>Next</th><th>Push</th><th>δ notation</th></tr></thead><tbody id="cfg-tbody"></tbody></table></div>
+        <div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag pda">GNF Intermediate</span><div class="sec-line"></div></div><div id="cfg-gnf-wrap" class="result-wrap"><table><thead><tr><th>#</th><th>GNF Production</th><th>Read</th><th>Push onto stack</th></tr></thead><tbody id="cfg-gnf-tbody"></tbody></table></div><div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag pda">Stack Simulator</span><div class="sec-line"></div></div><div class="anim-panel" id="cfg-anim-panel"><div class="anim-ctrl"><label>Input word</label><input type="text" id="anim-word" placeholder="e.g. aabb" style="width:130px" oninput="validateAnimWord(this)"><button class="anim-btn run" onclick="startAnimation()">&#9654; Run</button><button class="anim-btn" onclick="prevAnimation()">&#8249; Prev</button><button class="anim-btn" onclick="stepAnimation()">&#8250; Step</button><button class="anim-btn" onclick="resetAnimation()">&#8635; Reset</button><span class="anim-state-badge" id="anim-state-badge">q0</span></div><div id="anim-err" class="err-box" style="display:none"></div><div class="anim-head-wrap" id="tape-wrap"></div><div class="anim-main"><div class="anim-stack-wrap"><div class="anim-stack-lbl">Stack (top)</div><div class="anim-stack" id="anim-stack-vis"></div><div class="anim-stack-base"></div></div><div class="anim-trace" id="anim-trace"></div></div></div><div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag cfg">Original CFG</span><div class="sec-line"></div><span id="cfg-gram-count" style="font-family:var(--mono);font-size:.67rem;color:var(--rule2)"></span></div>
+        <div class="result-wrap"><table><thead><tr><th>#</th><th>Production</th></tr></thead><tbody id="cfg-gram-tbody"></tbody></table></div>
+        <div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag pda">PDA State Diagram</span><div class="sec-line"></div></div>
+        <div class="diagram-wrap">
+          <div class="diagram-hd"><span class="diagram-title">Interactive Graph</span><span class="diagram-sub">Drag nodes to rearrange &nbsp;&#183;&nbsp; Click self-loop labels to expand/contract</span></div>
+          <svg id="cfg-svg" style="width:100%;height:320px;display:block;"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PDA → CFG ═══ -->
+<div id="sec-pda" style="display:none">
+  <div class="conv-grid">
+    <div class="input-col">
+      <div class="panel">
+        <div class="panel-hd"><span class="panel-title">Automaton Input</span><span class="panel-badge">PDA</span></div>
+        <div class="panel-body">
+          <div class="ex-label">Examples</div>
+          <div class="ex-pills">
+            <button class="ex-pill" onclick="loadPDA('anbn')">a&#8319;b&#8319;</button>
+            <button class="ex-pill" onclick="loadPDA('wwr')">ww&#7523; Palindrome</button>
+          </div>
+          <div style="margin-top:.9rem">
+            <div class="pda-fields">
+              <div class="field-g"><label class="fl">States</label><input type="text" id="p-states" value="q0,q1,q2"></div>
+              <div class="field-g"><label class="fl">Input &#931;</label><input type="text" id="p-sigma" value="a,b"></div>
+              <div class="field-g"><label class="fl">Stack &#915;</label><input type="text" id="p-gamma" value="A,Z0"></div>
+              <div class="field-g"><label class="fl">Initial State</label><input type="text" id="p-init" value="q0"></div>
+              <div class="field-g"><label class="fl">Initial Stack</label><input type="text" id="p-istk" value="Z0"></div>
+              <div class="field-g"><label class="fl">Accept States</label><input type="text" id="p-finals" value="q2"></div>
+            </div>
+            <div style="margin-top:.45rem;padding:.32rem .65rem;background:rgba(41,128,185,.06);border:1px solid rgba(41,128,185,.18);border-radius:6px;font-family:var(--mono);font-size:.68rem;color:var(--pda-col)">
+              &#9432; Use <b>eps</b> or <b>&#949;</b> for epsilon in any field below
+            </div>
+          </div>
+          <div style="margin-top:.9rem">
+            <div class="ex-label" style="margin-bottom:.45rem">Transition Function &#948;</div>
+            <div class="ptr-hd"><span>State</span><span>Input</span><span>Stack</span><span>Next</span><span>Push</span><span></span></div>
+            <div id="pda-rows"></div>
+            <button class="add-tr-btn" onclick="addPDARow()">+ Add Transition</button>
+          </div>
+          <button class="convert-btn" style="margin-top:1rem" onclick="runPDAtoCFG()">Convert PDA &#8594; CFG &nbsp;&#8250;</button>
+          <div id="pda-err" class="err-box" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+    <div class="output-col">
+      <div id="pda-empty" class="panel">
+        <div class="panel-hd"><span class="panel-title">Conversion Output</span><span class="panel-badge">CFG</span></div>
+        <div class="panel-body"><div class="empty-state"><div class="big">&#8672;</div><p>Define a PDA and click Convert</p></div></div>
+      </div>
+      <div id="pda-out" style="display:none">
+        <div class="sec-hd"><span class="sec-tag pda">Step-by-Step</span><div class="sec-line"></div><span id="pda-ok" class="ok-tag" style="display:none">&#10003; Complete</span></div>
+        <div id="pda-steps" class="steps-flow"></div>
+        <div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag cfg">Generated Productions</span><div class="sec-line"></div></div>
+        <div class="result-wrap"><table><thead><tr><th>#</th><th>Production</th><th>Source Transition</th></tr></thead><tbody id="pda-tbody"></tbody></table></div>
+        <div class="sec-hd" style="margin-top:1.2rem"><span class="sec-tag pda">PDA State Diagram</span><div class="sec-line"></div></div>
+        <div class="diagram-wrap">
+          <div class="diagram-hd"><span class="diagram-title">Interactive Graph</span><span class="diagram-sub">Drag nodes to rearrange &nbsp;&#183;&nbsp; Click self-loop labels to expand/contract</span></div>
+          <svg id="pda-svg" style="width:100%;height:320px;display:block;"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ═══ THEORY ═══ -->
+<div id="sec-theory" style="display:none">
+<div class="theory-wrap">
+  <div class="theory-hero">
+    <h1>Formal Language Theory:<br><em>CFG &amp; PDA</em></h1>
+    <p>A concise reference covering definitions, the equivalence theorem, and both conversion algorithms — everything you need to understand what this tool computes and why it works.</p>
+  </div>
+
+  <!-- CFG -->
+  <div class="theory-section">
+    <div class="theory-section-title">Context-Free Grammars</div>
+    <div class="theory-two-col">
+      <div class="theory-card">
+        <span class="theory-tag cfg">Definition</span>
+        <h3>A CFG is a 4-tuple G = (V, &#931;, R, S)</h3>
+        <ul>
+          <li><strong>V</strong> — finite set of non-terminal variables</li>
+          <li><strong>&#931;</strong> — finite set of terminal symbols (V &#8745; &#931; = &#8709;)</li>
+          <li><strong>R</strong> — finite set of production rules A &#8594; &#945;</li>
+          <li><strong>S &#8712; V</strong> — the start variable</li>
+        </ul>
+        <p style="margin-top:.7rem">Each rule has a single non-terminal on the left and any string over V &#8746; &#931; on the right (including &#949; for the empty string).</p>
+      </div>
+      <div class="theory-card">
+        <span class="theory-tag cfg">Derivation</span>
+        <h3>How a CFG generates strings</h3>
+        <p>Starting from S, repeatedly replace any non-terminal with the right-hand side of one of its rules. A string <em>w &#8712; &#931;*</em> is in L(G) iff S &#8658;* w.</p>
+        <div class="theory-formula">
+          <span class="kw">S</span> <span class="sym">&#8658;</span> <span class="kw">a</span><span class="kw">S</span><span class="kw">b</span> <span class="sym">&#8658;</span> <span class="kw">a</span><span class="kw">a</span><span class="kw">S</span><span class="kw">b</span><span class="kw">b</span> <span class="sym">&#8658;</span> <span class="kw">aa</span><span class="ep">&#949;</span><span class="kw">bb</span> <span class="sym">&#8658;</span> <span class="t">aabb</span><br>
+          <span class="cmt">Grammar: S &#8594; aSb | &#949; &nbsp;&nbsp; Language: {a&#8319;b&#8319; | n &#8805; 0}</span>
+        </div>
+      </div>
+    </div>
+    <div class="theory-card">
+      <span class="theory-tag cfg">Input format for this tool</span>
+      <h3>Writing productions</h3>
+      <p>Write one rule per line in the form <code style="font-family:var(--mono);color:var(--cfg-col)">LHS -&gt; RHS</code>. Separate symbols in the RHS with spaces. Use <code style="font-family:var(--mono);color:var(--accent4)">&#949;</code> or <code style="font-family:var(--mono);color:var(--accent4)">eps</code> for the empty string. Use <code style="font-family:var(--mono)">|</code> for alternation.</p>
+      <div class="theory-formula">
+        <span class="kw">S</span> <span class="sym">-&gt;</span> <span class="kw">a</span> <span class="kw">S</span> <span class="kw">b</span> <span class="sym">|</span> <span class="ep">&#949;</span> &nbsp;&nbsp; <span class="cmt">or equivalently on two lines:</span><br>
+        <span class="kw">S</span> <span class="sym">-&gt;</span> <span class="kw">a</span> <span class="kw">S</span> <span class="kw">b</span><br>
+        <span class="kw">S</span> <span class="sym">-&gt;</span> <span class="ep">&#949;</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="theory-divider"></div>
+
+  <!-- PDA -->
+  <div class="theory-section">
+    <div class="theory-section-title">Pushdown Automata</div>
+    <div class="theory-two-col">
+      <div class="theory-card">
+        <span class="theory-tag pda">Definition</span>
+        <h3>A PDA is a 7-tuple M = (Q, &#931;, &#915;, &#948;, q&#8320;, Z&#8320;, F)</h3>
+        <ul>
+          <li><strong>Q</strong> — finite set of states</li>
+          <li><strong>&#931;</strong> — input alphabet</li>
+          <li><strong>&#915;</strong> — stack alphabet</li>
+          <li><strong>&#948;</strong> — transition function Q &#215; &#931;&#949; &#215; &#915;&#949; &#8594; 2<sup>Q&#215;&#915;*</sup></li>
+          <li><strong>q&#8320; &#8712; Q</strong> — initial state</li>
+          <li><strong>Z&#8320; &#8712; &#915;</strong> — initial stack symbol</li>
+          <li><strong>F &#8838; Q</strong> — accept states</li>
+        </ul>
+      </div>
+      <div class="theory-card">
+        <span class="theory-tag pda">Transitions</span>
+        <h3>How transitions work</h3>
+        <p>A transition &#948;(p, a, A) &#8715; (q, &#947;) means: in state p, reading input a (or &#949;), with A on the stack top — pop A, push &#947;, move to state q.</p>
+        <div class="theory-formula">
+          <span class="sym">&#948;(q0, a, Z0) = (q0, A Z0)</span><br>
+          <span class="cmt">In q0, read 'a', pop Z0, push A Z0</span><br><br>
+          <span class="sym">&#948;(q0, b, A) = (q1, &#949;)</span><br>
+          <span class="cmt">In q0, read 'b', pop A, push nothing</span>
+        </div>
+        <p>Two acceptance modes: <strong>final state</strong> (in F when input ends) or <strong>empty stack</strong> (stack empty when input ends). They are equivalent in power.</p>
+      </div>
+    </div>
+    <div class="theory-card">
+      <span class="theory-tag pda">Key property</span>
+      <h3>Why the stack matters</h3>
+      <p>A finite automaton has no memory beyond its current state. A PDA adds a LIFO stack — this single addition is exactly enough to recognise all context-free languages. The stack can simulate a counter or match nested structures, but it cannot count two independent quantities simultaneously (which is why {a&#8319;b&#8319;c&#8319;} is not context-free).</p>
+    </div>
+  </div>
+
+  <div class="theory-divider"></div>
+
+  <!-- Equivalence -->
+  <div class="theory-section">
+    <div class="theory-section-title">The Equivalence Theorem</div>
+    <div class="equiv-banner">
+      <div class="big-sym">&#8660;</div>
+      <p><strong>Theorem (Chomsky &amp; Schützenberger):</strong> A language L is context-free if and only if there exists a pushdown automaton that accepts L. The constructions are explicit and algorithmic in both directions.</p>
+    </div>
+    <div class="theory-two-col">
+      <div class="theory-card">
+        <span class="theory-tag thm">Closure properties of CFLs</span>
+        <ul>
+          <li>&#10003; Union &nbsp; L&#8321; &#8746; L&#8322;</li>
+          <li>&#10003; Concatenation &nbsp; L&#8321; &#8901; L&#8322;</li>
+          <li>&#10003; Kleene star &nbsp; L*</li>
+          <li>&#10007; Intersection &nbsp; L&#8321; &#8745; L&#8322;</li>
+          <li>&#10007; Complement &nbsp; &#8705;L</li>
+          <li>&#10003; Intersection with regular</li>
+        </ul>
+      </div>
+      <div class="theory-card">
+        <span class="theory-tag thm">Pumping Lemma (CFLs)</span>
+        <p>For every CFL L, &#8707; p such that every string w &#8712; L with |w| &#8805; p can be written w = uvxyz where:</p>
+        <ul>
+          <li>|vy| &#8805; 1</li>
+          <li>|vxy| &#8804; p</li>
+          <li>uv&#8503;xy&#8503;z &#8712; L for all i &#8805; 0</li>
+        </ul>
+        <p style="margin-top:.5rem">Used to prove a language is <em>not</em> context-free.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="theory-divider"></div>
+
+  <!-- CFG → PDA algorithm -->
+  <div class="theory-section">
+    <div class="theory-section-title">Algorithm: CFG &#8594; PDA (via GNF)</div>
+    <div class="theory-card" style="margin-bottom:.6rem">
+      <p><strong>Goal:</strong> Given CFG G = (V, &#931;, R, S), construct a 3-state NPDA P that accepts L(G) by <em>empty stack</em>. This tool converts via <strong>Greibach Normal Form (GNF)</strong> — every rule has the form A &#8594; t &#945; where t is a terminal and &#945; is a (possibly empty) sequence of non-terminals. This makes the PDA transitions one-to-one with grammar rules.</p>
+    </div>
+    <div class="theory-card">
+      <div class="algo-step">
+        <div class="algo-step-num">1</div>
+        <div class="algo-step-body">
+          <strong>Transform CFG to GNF (four sub-steps)</strong>
+          <p><b>1a. Remove &#949;-productions:</b> Find all nullable non-terminals (those deriving &#949;). For every rule A&#8594;&#945;, add versions where each nullable symbol in &#945; is optionally deleted. Retain S&#8594;&#949; only if S is nullable.<br>
+          <b>1b. Remove unit productions:</b> A&#8594;B (single NT) is replaced by copying all B-rules into A, then discarding A&#8594;B. Repeat until none remain.<br>
+          <b>1c. Introduce auxiliary terminal variables:</b> For any terminal t appearing at position &#8805;1 in a RHS, introduce a fresh variable A<sub>i</sub> with rule A<sub>i</sub>&#8594;t. Replace t with A<sub>i</sub> in those positions. This ensures all non-first positions hold only non-terminals.<br>
+          <b>1d. Eliminate left recursion:</b> Using the standard algorithm (substitute Aj rules into Ai for j&lt;i, then eliminate direct left recursion A<sub>i</sub>&#8594;A<sub>i</sub>&#945; by introducing A<sub>i</sub>&#8242;). After all passes every rule starts with a terminal.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">2</div>
+        <div class="algo-step-body">
+          <strong>Build the 3-state NPDA from GNF</strong>
+          <p>States: <code style="font-family:var(--mono);color:var(--pda-col)">q0</code> (start), <code style="font-family:var(--mono);color:var(--pda-col)">q1</code> (simulate), <code style="font-family:var(--mono);color:var(--pda-col)">q2</code> (accept). Z&#8320; is the initial stack symbol.<br>
+          &#948;(q0, &#949;, Z&#8320;) = (q1, S) &mdash; discard Z&#8320;, push start symbol S.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">3</div>
+        <div class="algo-step-body">
+          <strong>One PDA transition per GNF rule</strong>
+          <p>For each GNF rule <b>A &#8594; t B&#8321; B&#8322; &#8230; B&#8342;</b>:<br>
+          &#948;(q1, t, A) = (q1, B&#8321; B&#8322; &#8230; B&#8342;) &mdash; read terminal t, pop A, push the non-terminal suffix B&#8321;&#8230;B&#8342; (B&#8342; pushed first so B&#8321; is on top).<br>
+          For <b>A &#8594; &#949;</b>: &#948;(q1, &#949;, A) = (q1, &#949;) &mdash; just pop A.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">4</div>
+        <div class="algo-step-body">
+          <strong>Accept by empty stack</strong>
+          <p>&#948;(q1, &#949;, Z&#8320;) = (q2, &#949;) &mdash; when Z&#8320; is reached the stack is effectively empty and all derivation is done; move to the accept state q2. The string is accepted iff all input is consumed at this point.</p>
+        </div>
+      </div>
+    </div>
+    <div class="theory-formula">
+      <span class="cmt">Example: G: S &#8594; A C &nbsp; A &#8594; a A b | a A | &#949; &nbsp; C &#8594; c C | &#949;</span><br>
+      <span class="cmt">After GNF conversion (aux vars A&#8321;&#8594;b, A&#8322;&#8594;c created):</span><br>
+      <span class="sym">S &#8594; a A&#700; C</span> &nbsp; <span class="cmt">(example GNF rule from left-recursion elimination)</span><br>
+      <span class="sym">&#948;(q0, &#949;, Z&#8320;)</span> = <span class="kw">(q1, S)</span><br>
+      <span class="sym">&#948;(q1, a, A)</span> &#8715; <span class="kw">(q1, A A&#8321;)</span> &nbsp; <span class="cmt">&#8592; rule A&#8594;a A b via A&#8321;&#8594;b</span><br>
+      <span class="sym">&#948;(q1, a, A)</span> &#8715; <span class="kw">(q1, A)</span> &nbsp;&nbsp;&nbsp;<span class="cmt">&#8592; rule A&#8594;a A</span><br>
+      <span class="sym">&#948;(q1, &#949;, A)</span> &#8715; <span class="kw">(q1, &#949;)</span> &nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt">&#8592; rule A&#8594;&#949;</span><br>
+      <span class="sym">&#948;(q1, c, C)</span> &#8715; <span class="kw">(q1, C)</span> &nbsp;&nbsp;&nbsp;<span class="cmt">&#8592; rule C&#8594;c C</span><br>
+      <span class="sym">&#948;(q1, &#949;, C)</span> &#8715; <span class="kw">(q1, &#949;)</span> &nbsp;&nbsp;&nbsp;&nbsp;<span class="cmt">&#8592; rule C&#8594;&#949;</span><br>
+      <span class="sym">&#948;(q1, &#949;, Z&#8320;)</span> = <span class="kw">(q2, &#949;)</span>
+    </div>
+  </div>
+
+  <div class="theory-divider"></div>
+
+  <!-- PDA → CFG algorithm -->
+  <div class="theory-section">
+    <div class="theory-section-title">Algorithm: PDA &#8594; CFG</div>
+    <div class="theory-card" style="margin-bottom:.6rem">
+      <p><strong>Goal:</strong> Given PDA P = (Q, &#931;, &#915;, &#948;, q&#8320;, Z&#8320;, F), construct a CFG G with L(G) = L(P). Assume P accepts by empty stack (convert from final-state acceptance if needed).</p>
+      <p>The key idea: CFG variables are <strong>triples [p, A, q]</strong>, each representing the ability to "start in state p with A on the stack, consume input, and reach state q with A fully processed."</p>
+    </div>
+    <div class="theory-card">
+      <div class="algo-step">
+        <div class="algo-step-num">1</div>
+        <div class="algo-step-body">
+          <strong>Start productions</strong>
+          <p>Add S &#8594; [q&#8320;, Z&#8320;, q] for every state q &#8712; Q. This covers all ways the PDA can fully consume the initial stack while starting from the initial configuration.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">2</div>
+        <div class="algo-step-body">
+          <strong>Pop transitions (&#947; = &#949;)</strong>
+          <p>For &#948;(p, a, A) &#8715; (r, &#949;): add rule <strong>[p, A, r] &#8594; a</strong>. One rule per transition; no intermediate states needed since nothing is pushed.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">3</div>
+        <div class="algo-step-body">
+          <strong>Push transitions (&#947; = B&#8321;&#8230;B&#8318;)</strong>
+          <p>For &#948;(p, a, A) &#8715; (r, B&#8321;&#8230;B&#8318;): add rules <strong>[p, A, q&#8318;] &#8594; a [r, B&#8321;, q&#8321;] [q&#8321;, B&#8322;, q&#8322;] &#8230; [q&#8318;&#8331;&#8321;, B&#8318;, q&#8318;]</strong> for every combination q&#8321;,&#8230;,q&#8318; &#8712; Q. This yields |Q|&#8319; rules per transition.</p>
+        </div>
+      </div>
+      <div class="algo-step">
+        <div class="algo-step-num">4</div>
+        <div class="algo-step-body">
+          <strong>Clean up (optional)</strong>
+          <p>Remove unreachable variables (not derivable from S) and useless variables (that never derive a terminal string). The language is unchanged; the grammar is simplified.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="theory-divider"></div>
+
+  <!-- Comparison table -->
+  <div class="theory-section">
+    <div class="theory-section-title">Quick Reference</div>
+    <div class="theory-card">
+      <table class="theory-table">
+        <thead><tr><th>Property</th><th>CFG</th><th>PDA</th></tr></thead>
+        <tbody>
+          <tr><td>Representation</td><td>Production rules</td><td>States + stack + transitions</td></tr>
+          <tr><td>Memory model</td><td>Implicit (derivation tree)</td><td>Explicit LIFO stack</td></tr>
+          <tr><td>Acceptance</td><td>w derivable from S</td><td>Final state or empty stack</td></tr>
+          <tr><td>Deterministic?</td><td>Ambiguous vs unambiguous</td><td>DPDA &#8842; NPDA in power</td></tr>
+          <tr><td>Recognised class</td><td>Context-Free Languages</td><td>Context-Free Languages</td></tr>
+          <tr><td>Parsing complexity</td><td>CYK: O(n³) for CNF</td><td>Simulation: O(n³) in general</td></tr>
+          <tr><td>Non-determinism</td><td>Multiple rules per variable</td><td>Multiple transitions per config</td></tr>
+          <tr><td>Examples</td><td>aⁿbⁿ, balanced brackets</td><td>aⁿbⁿ, balanced brackets</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+</main>
+
+<script>
+// ─── MODE ───
+function setMode(m){
+  document.getElementById('btn-cfg').classList.toggle('active',m==='cfg');
+  document.getElementById('btn-pda').classList.toggle('active',m==='pda');
+  document.getElementById('btn-theory').classList.toggle('active',m==='theory');
+  document.getElementById('sec-cfg').style.display=m==='cfg'?'block':'none';
+  document.getElementById('sec-pda').style.display=m==='pda'?'block':'none';
+  document.getElementById('sec-theory').style.display=m==='theory'?'block':'none';
+}
+
+// ─── UTILS ───
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function isNT(s){return /^[A-Z]/.test(s)&&s!='Z0'&&s!='Z\u2080';}
+function showErr(id,msg){var e=document.getElementById(id);e.textContent='\u26a0 '+msg;e.style.display='block';}
+
+// Unicode subscript digits ₀–₉ — used in A₁ A₂ aux var names
+var SUB_RE=/[\u2080-\u2089]/;
+
+function charTokens(s){
+  var tokens=[],i=0;
+  while(i<s.length){
+    if(s[i]==='['){var j=s.indexOf(']',i);if(j<0)j=s.length-1;tokens.push(s.slice(i,j+1));i=j+1;}
+    else if(/[A-Z]/.test(s[i])){
+      var j=i+1;
+      while(j<s.length&&(/[A-Z0-9']/.test(s[j])||SUB_RE.test(s[j])))j++;
+      tokens.push(s.slice(i,j));i=j;
+    }
+    else if(s[i]===' '||s[i]==='\t'){i++;}
+    else{tokens.push(s[i]);i++;}
+  }
+  return tokens;
+}
+
+function renderProd(lhs, rhs){
+  var rhsStr=typeof rhs==='string'?rhs:rhs.join(' ');
+  var h='<span class="r-lhs">'+esc(lhs)+'</span><span class="r-arr"> \u2192 </span><span class="r-rhs">';
+  if(!rhsStr||rhsStr=='\u03b5'||rhsStr=='eps'){
+    h+='<span class="ep">\u03b5</span>';
+  } else {
+    var tokens=charTokens(rhsStr);
+    tokens.forEach(function(tok){
+      if(tok=='\u03b5'||tok=='eps') h+='<span class="ep">\u03b5</span>';
+      else if(/^\[/.test(tok)) h+='<span class="nt">'+esc(tok)+'</span>';
+      else if(isNT(tok)) h+='<span class="nt">'+esc(tok)+'</span>';
+      else h+='<span class="t">'+esc(tok)+'</span>';
+    });
+  }
+  h+='</span>';
+  return h;
+}
+
+function trInline(from,inp,stk,to,push){
+  return '<span class="tr-st">'+esc(from)+'</span>'
+    +'<span class="tr-arr">, </span><span class="tr-in">'+esc(inp)+'</span>'
+    +'<span class="tr-arr">, </span><span class="tr-sk">'+esc(stk)+'</span>'
+    +'<span class="tr-arr"> \u2192 </span>'
+    +'<span class="tr-nx">'+esc(to)+'</span>'
+    +'<span class="tr-arr">, </span><span class="tr-pu">'+esc(push)+'</span>';
+}
+
+function stackHTML(items,lbl){
+  var cells='';
+  items.forEach(function(s){
+    var cls=s=='Z\u2080'||s=='Z0'?'sc-z0':s=='\u03b5'?'sc-empty':isNT(s)?'sc-nt':'sc-t';
+    cells+='<div class="sc '+cls+'">'+esc(s)+'</div>';
+  });
+  return '<div class="stk-box"><div class="stk-lbl">'+esc(lbl)+'</div><div class="stk-cells">'+cells+'</div></div>';
+}
+
+// ─── STEP CARD BUILDER ───
+function makeStepCard(num,label,desc,visHTML,delay){
+  var card=document.createElement('div');
+  card.className='step-item'+(num==1?' open':'');
+  card.style.animationDelay=(delay||0)+'s';
+
+  var hd=document.createElement('div'); hd.className='step-hd';
+  hd.onclick=function(){card.classList.toggle('open');};
+  var n=document.createElement('div'); n.className='step-num'; n.textContent=num;
+  var l=document.createElement('div'); l.className='step-label'; l.textContent=label;
+  var c=document.createElement('div'); c.className='step-chev'; c.textContent='\u25be';
+  hd.appendChild(n); hd.appendChild(l); hd.appendChild(c);
+
+  var body=document.createElement('div'); body.className='step-content';
+  var d=document.createElement('p'); d.className='step-desc'; d.textContent=desc;
+  body.appendChild(d);
+  if(visHTML){var v=document.createElement('div');v.innerHTML=visHTML;body.appendChild(v);}
+  card.appendChild(hd); card.appendChild(body);
+  return card;
+}
+
+// ─── CFG EXAMPLES & PARSE ───
+var CFG_EX={
+  anbn:'S -> aSb | eps',
+  wwr:'S -> aSa | bSb | a | b | eps',
+  equal:'S -> aB | bA | eps\nA -> a | aS | bAA\nB -> b | bS | aBB',
+  dyck:'S -> aSbS | eps'
+};
+function loadCFG(k){document.getElementById('cfg-input').value=CFG_EX[k];}
+
+// Tokenize a RHS string into symbols without requiring spaces.
+// Rules:
+//   - "eps" or "ε" → epsilon token
+//   - uppercase letter(s) → NT token (greedy; will be re-split in parseCFG if not a known NT)
+//   - lowercase letter or digit → terminal token (single char)
+//   - anything else → error
+// Returns array of raw tokens. Multi-char uppercase runs like "AB" are re-split later.
+function tokenizeRHS(rhs, lineNum){
+  var s=rhs.trim();
+  if(!s||s==='\u03b5'||s==='eps') return ['\u03b5'];
+  var tokens=[];
+  var i=0;
+  while(i<s.length){
+    // skip spaces
+    if(s[i]===' '||s[i]==='\t'){i++;continue;}
+    // epsilon keywords
+    if(s.slice(i,i+3)==='eps'){tokens.push('\u03b5');i+=3;continue;}
+    if(s[i]==='\u03b5'){tokens.push('\u03b5');i++;continue;}
+    // uppercase → non-terminal (greedy read; may be split later)
+    if(/[A-Z]/.test(s[i])){
+      var j=i+1;
+      // Only keep consuming uppercase/digits/' as long as they look like a multi-char NT name.
+      // We always do a greedy read here; parseCFG will re-split if needed.
+      while(j<s.length&&/[A-Z0-9']/.test(s[j]))j++;
+      tokens.push(s.slice(i,j));i=j;continue;
+    }
+    // lowercase or digit → single terminal
+    if(/[a-z0-9]/.test(s[i])){
+      tokens.push(s[i]);i++;continue;
+    }
+    throw new Error('Line '+lineNum+': unexpected character \u201c'+s[i]+'\u201d in RHS \u201c'+rhs.trim()+'\u201d');
+  }
+  if(!tokens.length) throw new Error('Line '+lineNum+': empty RHS after \u2192');
+  return tokens;
+}
+
+// Re-split a token that looks like a multi-char NT sequence (e.g. "AB" → ["A","B"])
+// against the set of known NTs. Uses a greedy left-to-right match against known NTs,
+// falling back to single-letter split if no match is found.
+function resolveTok(tok, NTs, lineNum){
+  if(tok==='\u03b5'||!/^[A-Z]/.test(tok)) return [tok]; // eps or terminal: pass through
+  if(NTs.has(tok)) return [tok]; // known NT: use as-is
+  // tok is not a known NT — try to split it into known NTs greedily
+  var result=[];
+  var i=0;
+  while(i<tok.length){
+    // Try longest match first (greedy), then shorten
+    var matched=false;
+    for(var len=tok.length-i;len>=1;len--){
+      var sub=tok.slice(i,i+len);
+      if(NTs.has(sub)){result.push(sub);i+=len;matched=true;break;}
+    }
+    if(!matched){
+      // Single char not a known NT — must be a single uppercase letter used as NT
+      // (user wrote S->AB where A or B is not defined — will be caught by undefined-NT check)
+      result.push(tok[i]);i++;
+    }
+  }
+  return result;
+}
+
+function parseCFG(text){
+  var rules=[];
+  var lines=text.trim().split('\n').filter(function(l){return l.trim();});
+  var allLHSOrder=[];
+
+  // First pass: collect all LHS NTs in order
+  lines.forEach(function(line,li){
+    var arrowIdx=line.indexOf('->');
+    if(arrowIdx<0) throw new Error('Line '+(li+1)+': missing \u2192 arrow. Expected format: S -> aSb | eps');
+    var lhs=line.slice(0,arrowIdx).trim();
+    if(!lhs) throw new Error('Line '+(li+1)+': left-hand side is empty.');
+    if(!/^[A-Z][0-9']*$/.test(lhs))
+      throw new Error('Line '+(li+1)+': left-hand side \u201c'+lhs+'\u201d must be a single uppercase letter (A\u2013Z) optionally followed by digits or \u2019 (e.g. S, A, B\u2019, A1). Got: \u201c'+lhs+'\u201d');
+    if(allLHSOrder.indexOf(lhs)<0) allLHSOrder.push(lhs);
+  });
+
+  if(!allLHSOrder.length) throw new Error('No rules found.');
+  if(allLHSOrder[0]!=='S')
+    throw new Error('Start symbol must be S. The first rule must have S on the left-hand side. Got: \u201c'+allLHSOrder[0]+'\u201d');
+
+  var NTs=new Set(allLHSOrder);
+
+  // Second pass: parse each rule, resolve adjacent NTs, validate symbols
+  lines.forEach(function(line,li){
+    var arrowIdx=line.indexOf('->');
+    var lhs=line.slice(0,arrowIdx).trim();
+    var rhsPart=line.slice(arrowIdx+2);
+    var alts=rhsPart.split('|');
+    alts.forEach(function(alt){
+      var rawTokens=tokenizeRHS(alt, li+1);
+      // Re-split any multi-char uppercase token that isn't a known NT
+      var tokens=[];
+      rawTokens.forEach(function(tok){
+        resolveTok(tok, NTs, li+1).forEach(function(t){tokens.push(t);});
+      });
+      // Validate each resolved token
+      tokens.forEach(function(tok){
+        if(tok==='\u03b5') return;
+        if(/^[A-Z]/.test(tok)){
+          // uppercase token — valid NT shape; undefined check happens in runCFGtoPDA
+        } else if(/^[a-z0-9]$/.test(tok)){
+          // single lowercase terminal — fine
+        } else {
+          throw new Error('Line '+(li+1)+': symbol \u201c'+tok+'\u201d is invalid. Non-terminals must start with an uppercase letter; terminals must be a single lowercase letter or digit.');
+        }
+      });
+      rules.push({lhs:lhs, rhs:tokens});
+    });
+  });
+  if(!rules.length) throw new Error('No rules found.');
+  return rules;
+}
+
+// ─── GNF CONVERSION ENGINE ───
+// Stores computed GNF rules & PDA transitions globally for animation
+var _gnfRules=[], _pdaTrans=[], _cfgTerminals=new Set(), _cfgNTs=new Set();
+var _cfgRules=[], _cfgStartSym='';
+var _animSteps=[], _animIdx=0, _animTimer=null;
+
+function cfgToGNF(rules){
+  // Collect NTs and terminals
+  var NTs=new Set(rules.map(function(r){return r.lhs;}));
+  var Ts=new Set();
+  rules.forEach(function(r){r.rhs.forEach(function(s){if(s!=='\u03b5'&&!NTs.has(s))Ts.add(s);});});
+  var startSym=rules[0].lhs;
+
+  // ── Step 1: Remove ε-productions ──
+  var nullable=new Set();
+  var chg=true;
+  while(chg){chg=false;
+    rules.forEach(function(r){
+      if(!nullable.has(r.lhs)&&(r.rhs[0]==='\u03b5'||r.rhs.every(function(s){return nullable.has(s);})))
+        {nullable.add(r.lhs);chg=true;}
+    });
+  }
+  var expanded=[];
+  rules.forEach(function(r){
+    if(r.rhs[0]==='\u03b5') return;
+    var nullIdx=r.rhs.map(function(s,i){return nullable.has(s)?i:-1;}).filter(function(i){return i>=0;});
+    var total=1<<nullIdx.length;
+    for(var mask=0;mask<total;mask++){
+      var rhs=r.rhs.filter(function(s,i){
+        var ni=nullIdx.indexOf(i); return ni<0||!((mask>>ni)&1);
+      });
+      if(rhs.length>0) expanded.push({lhs:r.lhs,rhs:rhs});
+    }
+  });
+  if(nullable.has(startSym)) expanded.push({lhs:startSym,rhs:['\u03b5']});
+  expanded=dedup(expanded);
+
+  // ── Step 2: Remove unit productions ──
+  var done=false;
+  while(!done){done=true;
+    var nxt=[];
+    expanded.forEach(function(r){
+      if(r.rhs.length===1&&NTs.has(r.rhs[0])&&r.rhs[0]!==r.lhs){
+        expanded.forEach(function(r2){if(r2.lhs===r.rhs[0])nxt.push({lhs:r.lhs,rhs:r2.rhs.slice()});});
+        done=false;
+      } else nxt.push(r);
+    });
+    expanded=dedup(nxt);
+  }
+
+  // ── Step 3: Replace terminals in non-first positions with aux NT variables ──
+  // GNF requires: A → t A₁ A₂ ... Aₖ  where ALL Aᵢ are non-terminals.
+  // For each terminal t appearing at position >=1, introduce aux var A₁, A₂, ...
+  var SUBSCRIPTS=['\u2080','\u2081','\u2082','\u2083','\u2084','\u2085','\u2086','\u2087','\u2088','\u2089'];
+  function toSubscript(n){
+    return String(n).split('').map(function(d){return SUBSCRIPTS[parseInt(d)]||d;}).join('');
+  }
+  var termVar={};  // terminal → aux NT name
+  var auxRules=[];
+  var _auxCounter=1;  // global counter for A₁, A₂, A₃...
+  function mkAuxVar(t){
+    if(termVar[t]) return termVar[t];
+    // Name aux vars as A₁, A₂, A₃, ... (avoiding collisions with existing NTs)
+    var v;
+    do { v='A'+toSubscript(_auxCounter++); } while(NTs.has(v));
+    termVar[t]=v; NTs.add(v);
+    auxRules.push({lhs:v,rhs:[t]});
+    return v;
+  }
+  expanded=expanded.map(function(r){
+    if(r.rhs.length<=1) return r;
+    var newRhs=[r.rhs[0]];  // first position kept as-is (will be terminal after GNF)
+    for(var i=1;i<r.rhs.length;i++){
+      var s=r.rhs[i];
+      if(Ts.has(s)) newRhs.push(mkAuxVar(s));  // replace terminal with aux NT
+      else newRhs.push(s);
+    }
+    return {lhs:r.lhs,rhs:newRhs};
+  });
+  expanded=expanded.concat(auxRules);
+  expanded=dedup(expanded);
+
+  // ── Step 4: Greibach algorithm — eliminate left recursion so all rules start with terminal ──
+  var origNTs=[...NTs].filter(function(v){return !Object.values(termVar).includes(v);});
+
+  for(var i=0;i<origNTs.length;i++){
+    var Ai=origNTs[i];
+    // Substitute Aj (j<i) at the front of Ai's rules
+    for(var j=0;j<i;j++){
+      var Aj=origNTs[j];
+      var nxt2=[];
+      expanded.forEach(function(r){
+        if(r.lhs===Ai&&r.rhs.length&&r.rhs[0]===Aj){
+          expanded.forEach(function(r2){
+            if(r2.lhs===Aj) nxt2.push({lhs:Ai,rhs:r2.rhs.concat(r.rhs.slice(1))});
+          });
+        } else nxt2.push(r);
+      });
+      expanded=dedup(nxt2);
+    }
+    // Remove direct left recursion: Ai→Ai α | β  →  Ai→β Ai', Ai'→α Ai'|α
+    var rec=expanded.filter(function(r){return r.lhs===Ai&&r.rhs.length&&r.rhs[0]===Ai;});
+    if(rec.length>0){
+      var nonRec=expanded.filter(function(r){return !(r.lhs===Ai&&r.rhs.length&&r.rhs[0]===Ai);});
+      var Ai2=Ai+"'"; NTs.add(Ai2);
+      var nxt3=[];
+      nonRec.forEach(function(r){
+        if(r.lhs===Ai) nxt3.push({lhs:Ai,rhs:r.rhs.concat([Ai2])});
+        else nxt3.push(r);
+      });
+      rec.forEach(function(r){
+        var alpha=r.rhs.slice(1);
+        nxt3.push({lhs:Ai2,rhs:alpha.concat([Ai2])});
+        nxt3.push({lhs:Ai2,rhs:alpha.length?alpha:['\u03b5']});
+      });
+      expanded=dedup(nxt3);
+    }
+  }
+
+  // ── Step 5: Back-substitute until all rules start with a terminal (or ε) ──
+  for(var pass=0;pass<60;pass++){
+    var dirty=false; var sub=[];
+    expanded.forEach(function(r){
+      if(!r.rhs.length||r.rhs[0]==='\u03b5'||Ts.has(r.rhs[0])){sub.push(r);return;}
+      var head=r.rhs[0],tail=r.rhs.slice(1);
+      var matches=expanded.filter(function(r2){return r2.lhs===head;});
+      if(matches.length){
+        matches.forEach(function(r2){sub.push({lhs:r.lhs,rhs:r2.rhs.concat(tail)});});
+        dirty=true;
+      } else sub.push(r);
+    });
+    expanded=dedup(sub);
+    if(!dirty) break;
+  }
+
+  // ── Step 6: Collect GNF rules ──
+  // Each rule: A → t B1 B2 ... Bk  (t terminal, all Bi are NTs — verified)
+  var gnf=[];
+  var gnfSeen=new Set();
+  expanded.forEach(function(r){
+    if(r.rhs[0]==='\u03b5'){
+      var k=r.lhs+'\u2192\u03b5';
+      if(!gnfSeen.has(k)){gnfSeen.add(k);gnf.push({lhs:r.lhs,terminal:'\u03b5',vars:[]});}
+    } else if(Ts.has(r.rhs[0])){
+      // Verify all remaining are NTs (they should be after step 3)
+      var vars=r.rhs.slice(1);
+      var k=r.lhs+'\u2192'+r.rhs[0]+vars.join('');
+      if(!gnfSeen.has(k)){gnfSeen.add(k);gnf.push({lhs:r.lhs,terminal:r.rhs[0],vars:vars});}
+    }
+  });
+
+  return {gnf:gnf, NTs:NTs, Ts:Ts, startSym:startSym, termVar:termVar};
+}
+
+function dedup(rules){
+  var seen=new Set();
+  return rules.filter(function(r){
+    var k=r.lhs+'->'+r.rhs.join('\u00b7');
+    if(seen.has(k))return false; seen.add(k); return true;
+  });
+}
+
+// ─── Build PDA transitions from GNF ───
+// GNF → PDA: states q0(init), q1(loop), q2(accept)
+// Each GNF rule A -> t B1B2...Bk:
+//   δ(q1, t, A) = (q1, B1 B2 ... Bk)   [push vars one at a time]
+// Init: δ(q0, ε, Z₀) = (q1, S Z₀)
+// Accept: δ(q1, ε, Z₀) = (q2, Z₀)
+function gnfToPDA(startSym, gnf, Ts){
+  // Standard 3-state PDA from GNF.
+  // GNF guarantees: every rule A→t B1B2…Bk has ONE terminal t then k NTs.
+  //
+  // δ(q0, ε, Z0) = (q1, S)      init: push S, discard Z0 (empty-stack acceptance)
+  // For A→t B1…Bk: δ(q1,t,A) = (q1, B1B2…Bk)   ONE terminal read, push NTs only
+  // For A→ε:       δ(q1,ε,A) = (q1, ε)           pop variable
+  // Accept: δ(q1,ε,Z0) = (q2,ε)                  stack empty → accept
+
+  var trs=[];
+  // Init: push just S (accept by empty stack — Z0 popped immediately)
+  trs.push({from:'q0',inp:'\u03b5',stk:'Z\u2080',to:'q1',push:startSym,
+    delta:'\u03b4(q0, \u03b5, Z\u2080) = (q1, '+startSym+')'});
+
+  // One transition per GNF rule
+  gnf.forEach(function(g){
+    var pushStr=g.vars.length?g.vars.join(' '):'\u03b5';
+    var pushDisp=g.vars.length?g.vars.join(' '):'\u03b5';
+    if(g.terminal==='\u03b5'){
+      trs.push({from:'q1',inp:'\u03b5',stk:g.lhs,to:'q1',push:'\u03b5',
+        delta:'\u03b4(q1, \u03b5, '+g.lhs+') = (q1, \u03b5)'});
+    } else {
+      trs.push({from:'q1',inp:g.terminal,stk:g.lhs,to:'q1',push:pushStr,
+        delta:'\u03b4(q1, '+g.terminal+', '+g.lhs+') = (q1, '+pushDisp+')'});
+    }
+  });
+
+  // Accept when Z0 found (stack fully processed)
+  trs.push({from:'q1',inp:'\u03b5',stk:'Z\u2080',to:'q2',push:'\u03b5',
+    delta:'\u03b4(q1, \u03b5, Z\u2080) = (q2, \u03b5)'});
+  return trs;
+}
+
+// ─── Input validation for animation word ───
+function validateAnimWord(el){
+  var err=document.getElementById('anim-err');
+  err.style.display='none';
+  var w=el.value;
+  if(!w) return;
+  for(var i=0;i<w.length;i++){
+    if(!_cfgTerminals.has(w[i])){
+      err.textContent='\u26a0 Character \u201c'+w[i]+'\u201d is not a terminal of this grammar. Valid terminals: '+[..._cfgTerminals].join(', ');
+      err.style.display='block'; return;
+    }
+  }
+  if(/[A-Z]/.test(w)){
+    err.textContent='\u26a0 Input word must contain only terminals (lowercase/digits).';
+    err.style.display='block';
+  }
+}
+
+// ─── Direct PDA simulation via BFS (finds accepting path for NPDA) ───
+// We simulate the direct PDA (push full RHS onto stack) using BFS.
+// Each BFS node: {pos, stack (as array, top=last), path:[steps]}
+// ε-moves: if top is NT, expand using any CFG rule for that NT
+// read-moves: if top is terminal t and input[pos]==t, pop and advance
+// Accept: pos==word.length and top==Z₀ (then pop Z₀ → go to q2)
+
+// ─── GNF-PDA simulation ───
+// Simulates the *actual* 3-state PDA built from GNF:
+//   States: q0 (init), q1 (loop), q2 (accept)
+//   δ(q0, ε, Z₀) = (q1, S)           — push start symbol
+//   δ(q1, t, A) = (q1, B1 B2 … Bk)   — GNF rule A→t B1…Bk: read t, pop A, push Bk…B1 (reversed)
+//   δ(q1, ε, A) = (q1, ε)             — GNF rule A→ε: pop A
+//   δ(q1, ε, Z₀) = (q2, ε)           — accept by empty stack
+// BFS explores all non-deterministic paths; returns the first accepting path's step log.
+function buildAnimSteps(word, pdaTrans, startSym, Ts){
+  var EPS='\u03b5', Z0='Z\u2080', MAX=80000;
+
+  // Index PDA transitions for fast lookup: byStackTop[A] = list of transitions with stk==A
+  var byStk={};
+  pdaTrans.forEach(function(tr){
+    var k=tr.stk; // stack symbol to pop
+    if(!byStk[k]) byStk[k]=[];
+    byStk[k].push(tr);
+  });
+
+  // Initial configuration: q0, stack=[Z₀], pos=0
+  // Apply init transition immediately: δ(q0,ε,Z₀)=(q1,S)
+  var initTr=pdaTrans.find(function(t){return t.from==='q0';});
+  var initPush=initTr?initTr.push:startSym;
+  // initPush is the string pushed (e.g. "S"), split into symbols
+  var initSyms=initPush===EPS?[]:(initPush.indexOf(' ')>=0?initPush.split(' ').filter(Boolean):[initPush]);
+
+  var step0={state:'q0',stack:[Z0],head:0,
+    log:'\u03b4(q0, \u03b5, Z\u2080) = (q1, '+initPush+')  \u2014 init: pop Z\u2080, push '+initPush,type:'info'};
+  // After init: stack = initSyms reversed so first symbol on top
+  var initStk=initSyms.slice().reverse(); // top = last element
+  var step1={state:'q1',stack:initStk.slice(),head:0,
+    log:'Entered q1 with stack ['+initStk.slice().reverse().join(', ')+'] (top first). Begin GNF simulation.',type:'info'};
+
+  var initSteps=[step0,step1];
+
+  // BFS: each node = {state, pos, stk[], steps[]}
+  var queue=[{state:'q1',pos:0,stk:initStk.slice(),steps:initSteps}];
+  var vis=new Set();
+  vis.add('q1|0|'+initStk.join(','));
+  var found=null, n=0;
+
+  while(queue.length&&n<MAX){
+    var cur=queue.shift(); n++;
+    var state=cur.state,pos=cur.pos,stk=cur.stk,steps=cur.steps;
+
+    // Accept state reached
+    if(state==='q2'){
+      found=steps.concat([{state:'q2',stack:[],head:pos,
+        log:'\u2713 Reached accept state q2 with empty stack \u2014 ACCEPT! \u201c'+word+'\u201d \u2208 L(G)',type:'accept'}]);
+      break;
+    }
+
+    if(stk.length===0&&pos===word.length&&state==='q1'){
+      // Try δ(q1,ε,Z₀) — check if we already matched Z₀ as accept transition
+      // Empty stack = accepted by empty stack (Z₀ was already popped by accept transition)
+      found=steps.concat([{state:'q2',stack:[],head:pos,
+        log:'\u2713 Stack empty + all input consumed \u2014 ACCEPT! \u201c'+word+'\u201d \u2208 L(G)',type:'accept'}]);
+      break;
+    }
+
+    if(stk.length===0) continue;
+
+    var topSym=stk[stk.length-1]; // top of stack
+
+    // Try all matching transitions: from=state, stk=topSym
+    (byStk[topSym]||[]).forEach(function(tr){
+      if(tr.from!==state) return;
+      var inp=tr.inp; // required input: ε or a terminal
+
+      var inputOk=(inp===EPS)||(pos<word.length&&word[pos]===inp);
+      if(!inputOk) return;
+
+      var np=inp===EPS?pos:pos+1;
+      var nsBase=stk.slice(0,-1); // pop topSym
+      var pushSyms=tr.push===EPS?[]:(tr.push.indexOf(' ')>=0?tr.push.split(' ').filter(Boolean):[tr.push]);
+      // Push in reverse so first symbol ends on top
+      var ns=nsBase.slice();
+      for(var pi=pushSyms.length-1;pi>=0;pi--) ns.push(pushSyms[pi]);
+
+      var vk=tr.to+'|'+np+'|'+ns.join(',');
+      if(vis.has(vk)) return;
+      vis.add(vk);
+
+      var pushDisp=tr.push===EPS?'\u03b5':tr.push;
+      var logType=inp===EPS?(pushSyms.length===0?'pop':'push'):'match';
+      var logMsg='\u03b4('+state+', '+inp+', '+topSym+') = ('+tr.to+', '+pushDisp+')';
+      if(inp!==EPS) logMsg+='  \u2014 read \u2018'+inp+'\u2019, pop '+topSym+(pushSyms.length?', push '+pushDisp:'');
+      else if(pushSyms.length===0) logMsg+='  \u2014 \u03b5-move: pop '+topSym+' (rule '+topSym+'\u2192\u03b5)';
+      else logMsg+='  \u2014 \u03b5-move: pop '+topSym+', push '+pushDisp;
+
+      var newStk=ns.slice();
+      queue.push({state:tr.to,pos:np,stk:newStk,steps:steps.concat([
+        {state:tr.to,stack:newStk,head:np,log:logMsg,type:logType}
+      ])});
+    });
+  }
+
+  if(found) return found;
+  return [step0, step1,
+    {state:'q1',stack:[],head:word.length,
+     log:'No accepting path found \u2014 \u201c'+word+'\u201d \u2209 L(G)  REJECT.',type:'reject'}];
+}
+
+// ─── Animation control ───
+function _animWord(){return document.getElementById('anim-word').value;}
+
+function _validateWord(word){
+  var err=document.getElementById('anim-err'); err.style.display='none';
+  if(!_pdaTrans.length){err.textContent='\u26a0 Convert a CFG first.';err.style.display='block';return false;}
+  for(var i=0;i<word.length;i++){
+    if(!_cfgTerminals.has(word[i])){
+      err.textContent='\u26a0 \u201c'+word[i]+'\u201d is not a terminal of this grammar. Valid terminals: '+[..._cfgTerminals].join(', ');
+      err.style.display='block';return false;
+    }
+  }
+  return true;
+}
+
+function _initSteps(word){
+  if(_animSteps.length===0){
+    _animSteps=buildAnimSteps(word,_pdaTrans,_cfgStartSym,_cfgTerminals);
+    _animIdx=0;
+  }
+}
+
+function _isTerminalStep(){
+  return _animSteps.length>0&&(_animSteps[_animIdx].type==='accept'||_animSteps[_animIdx].type==='reject');
+}
+
+function renderAnimFull(word){
+  var badge=document.getElementById('anim-state-badge');
+  var step=_animSteps[_animIdx];
+  badge.textContent=step.state;
+  badge.className='anim-state-badge'+(step.state==='q2'?' active':'');
+
+  // Tape
+  var tw=document.getElementById('tape-wrap');
+  tw.innerHTML='<span style="font-family:var(--mono);font-size:.67rem;color:var(--rule2);margin-right:.3rem">INPUT:</span>';
+  for(var i=0;i<word.length;i++){
+    var cls='tape-cell'+(i===step.head?' head':i<step.head?' done':'');
+    tw.innerHTML+='<div class="'+cls+'">'+esc(word[i])+'</div>';
+  }
+  if(word.length===0) tw.innerHTML+='<span style="font-family:var(--mono);font-size:.72rem;color:var(--rule2)">\u03b5</span>';
+
+  // Stack — bottom at bottom, top at top visually
+  var sv=document.getElementById('anim-stack-vis');
+  sv.innerHTML='';
+  var stackArr=step.stack||[];
+  for(var j=0;j<stackArr.length;j++){
+    var s=stackArr[j];
+    var isZ=(s==='Z\u2080');
+    var isTerm=_cfgTerminals.has(s);
+    var cls2='anim-cell '+(isZ?'z0':isTerm?'term':'var');
+    // stack[0]=bottom, stack[last]=top; we want top at top visually
+    // prepend so that last element (top) appears at top
+    sv.innerHTML='<div class="'+cls2+' enter">'+esc(s)+'</div>'+sv.innerHTML;
+  }
+  if(stackArr.length===0){
+    sv.innerHTML='<div style="font-family:var(--mono);font-size:.72rem;color:var(--rule2);text-align:center;padding:.5rem">empty</div>';
+  }
+
+  // Trace log
+  var trace=document.getElementById('anim-trace');
+  trace.innerHTML='';
+  var icons={push:'\u25b2',pop:'\u25bc',match:'\u2713',info:'\u25b6',accept:'\u2713',reject:'\u2717'};
+  for(var k=0;k<=_animIdx;k++){
+    var s2=_animSteps[k];
+    var el=document.createElement('div');
+    el.className='anim-log '+s2.type+(k===_animIdx?' cur':'');
+    el.textContent=(icons[s2.type]||'\u25b6')+' ['+s2.state+'] '+s2.log;
+    trace.appendChild(el);
+  }
+  trace.scrollTop=trace.scrollHeight;
+
+  // Button states
+  var atEnd=_animIdx>=_animSteps.length-1||_isTerminalStep();
+  var atStart=_animIdx===0;
+  var stepBtn=document.querySelector('.anim-btn[onclick="stepAnimation()"]');
+  var prevBtn=document.querySelector('.anim-btn[onclick="prevAnimation()"]');
+  if(stepBtn){stepBtn.disabled=atEnd;stepBtn.style.opacity=atEnd?'0.4':'1';}
+  if(prevBtn){prevBtn.disabled=atStart;prevBtn.style.opacity=atStart?'0.4':'1';}
+}
+
+function startAnimation(){
+  clearInterval(_animTimer);_animTimer=null;
+  _animSteps=[];_animIdx=0;
+  document.getElementById('anim-stack-vis').innerHTML='';
+  document.getElementById('anim-trace').innerHTML='';
+  document.getElementById('tape-wrap').innerHTML='';
+  document.getElementById('anim-err').style.display='none';
+  var badge=document.getElementById('anim-state-badge');
+  badge.textContent='q0'; badge.className='anim-state-badge';
+
+  var word=_animWord();
+  if(!_validateWord(word)) return;
+  _initSteps(word);
+  renderAnimFull(word);
+  _animTimer=setInterval(function(){
+    if(_animIdx<_animSteps.length-1&&!_isTerminalStep()){
+      _animIdx++; renderAnimFull(word);
+    } else {clearInterval(_animTimer);_animTimer=null;}
+  },650);
+}
+
+function stepAnimation(){
+  clearInterval(_animTimer);_animTimer=null;
+  var word=_animWord();
+  if(!_validateWord(word)) return;
+  _initSteps(word);
+  if(_isTerminalStep()) return;
+  if(_animIdx<_animSteps.length-1) _animIdx++;
+  renderAnimFull(word);
+}
+
+function prevAnimation(){
+  clearInterval(_animTimer);_animTimer=null;
+  var word=_animWord();
+  if(!_validateWord(word)) return;
+  _initSteps(word);
+  if(_animIdx>0) _animIdx--;
+  renderAnimFull(word);
+}
+
+function resetAnimation(){
+  clearInterval(_animTimer);_animTimer=null;
+  _animSteps=[];_animIdx=0;
+  document.getElementById('anim-stack-vis').innerHTML='';
+  document.getElementById('anim-trace').innerHTML='';
+  document.getElementById('tape-wrap').innerHTML='';
+  var badge=document.getElementById('anim-state-badge');
+  badge.textContent='q0'; badge.className='anim-state-badge';
+  document.getElementById('anim-err').style.display='none';
+}
+
+// ─── CFG → PDA (via GNF) — main entry ───
+function runCFGtoPDA(){
+  document.getElementById('cfg-err').style.display='none';
+  var rawText=document.getElementById('cfg-input').value;
+
+  if(!rawText.trim()){showErr('cfg-err','Please enter at least one production rule.');return;}
+
+  // Parse with the smart tokenizer (no spaces required)
+  var rules;
+  try{rules=parseCFG(rawText);}
+  catch(e){showErr('cfg-err',e.message);return;}
+
+  // Collect NTs (defined LHS) and terminals
+  var NTs=new Set(rules.map(function(r){return r.lhs;}));
+  var Ts=new Set();
+  var terminalErrors=[];
+  rules.forEach(function(r,ri){
+    r.rhs.forEach(function(s){
+      if(s==='\u03b5') return;
+      if(NTs.has(s)) return; // it's an NT — fine
+      // It's a terminal — must be single lowercase char or digit
+      if(/^[a-z0-9]$/.test(s)){Ts.add(s);return;}
+      // Multi-char lowercase that slipped through (shouldn't happen with new tokenizer)
+      terminalErrors.push('Symbol \u201c'+s+'\u201d in rule '+r.lhs+' \u2192 '+r.rhs.join(' ')+': terminals must be a single lowercase letter or digit.');
+    });
+  });
+  if(terminalErrors.length){showErr('cfg-err',terminalErrors[0]);return;}
+
+  // Check: every NT used in RHS must be defined as a LHS
+  var undefinedNTs=[];
+  rules.forEach(function(r){
+    r.rhs.forEach(function(s){
+      if(s==='\u03b5') return;
+      if(/^[A-Z]/.test(s)&&!NTs.has(s)){
+        undefinedNTs.push('\u201c'+s+'\u201d in rule '+r.lhs+' \u2192 '+r.rhs.join(' '));
+      }
+    });
+  });
+  if(undefinedNTs.length){
+    showErr('cfg-err','Non-terminal '+undefinedNTs[0]+' has no production rule. Every uppercase symbol must appear as a left-hand side.');return;
+  }
+
+  var sv=rules[0].lhs; // guaranteed to be S by parser
+  _cfgTerminals=Ts; _cfgNTs=NTs;
+  _cfgRules=rules; _cfgStartSym=sv;
+
+  var container=document.getElementById('cfg-steps');
+  container.innerHTML='';
+
+  // ── Step 1: Define states (using q0,q1,q2) ──
+  var s1vis='<div class="rules-grid">'
+    +'<div class="rule-card"><span class="r-lhs">Q</span><span class="r-arr"> = </span><span class="r-rhs"><span class="nt">{ q0, q1, q2 }</span></span></div>'
+    +'<div class="rule-card"><span class="r-lhs">\u03a3</span><span class="r-arr"> = </span><span class="r-rhs"><span class="t">{ '+esc([...Ts].join(', '))+' }</span></span></div>'
+    +'<div class="rule-card"><span class="r-lhs">\u0393</span><span class="r-arr"> = </span><span class="r-rhs"><span class="nt">{ Z\u2080 }</span>\u222a<span class="nt">{ '+esc([...NTs].join(', '))+' }</span>\u222a<span class="t">{ '+esc([...Ts].join(', '))+' }</span></span></div>'
+    +'<div class="rule-card"><span class="r-lhs">Start</span><span class="r-arr"> = </span><span class="nt">q0</span>&nbsp;&nbsp;&nbsp;'
+    +'<span class="r-lhs">Stack\u2080</span><span class="r-arr"> = </span><span class="t">Z\u2080</span>&nbsp;&nbsp;&nbsp;'
+    +'<span class="r-lhs">Accept</span><span class="r-arr"> = </span><span class="nt">q2</span></div>'
+    +'</div>'
+    +'<div class="info-box" style="margin-top:.6rem">'
+    +'<span style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.35rem">'
+    +'<span style="font-family:var(--mono);font-size:.68rem;font-weight:700;padding:.15rem .55rem;border-radius:4px;background:rgba(192,57,43,.12);color:var(--accent)">NPDA</span>'
+    +'<b>Non-deterministic Pushdown Automaton</b></span><br>'
+    +'This construction always produces an <b>NPDA</b> (Non-deterministic PDA), not a DPDA. '
+    +'Non-determinism means multiple GNF rule choices may apply at once; the PDA accepts if <em>any</em> path accepts. '
+    +'<br><br><b>Method:</b> The CFG is first transformed to Greibach Normal Form (GNF). Each GNF rule A\u2192t\u03b1 gives exactly one PDA transition \u03b4(q1,t,A)=(q1,\u03b1): read terminal t, pop A, push \u03b1 (non-terminals only). '
+    +'<br><b>Stack animation:</b> Simulates the actual constructed GNF-PDA transitions step by step — reading one terminal per transition and pushing/popping according to the GNF rules. BFS finds the accepting path among all non-deterministic branches.</div>';
+  container.appendChild(makeStepCard(1,'Define the 3-state NPDA  (q0, q1, q2)',
+    'This construction always yields a Non-deterministic PDA (NPDA). q0 initialises the stack; q1 non-deterministically simulates GNF derivations; q2 is the accept state.',
+    s1vis,0));
+
+  // ── Step 2: Original CFG rules displayed ──
+  var s2orig='<div style="display:flex;flex-direction:column;gap:.3rem">';
+  rules.forEach(function(r,i){
+    s2orig+='<div class="rule-card" style="animation-delay:'+(i*.03)+'s">'
+      +renderProd(r.lhs,r.rhs.join(' '))+'</div>';
+  });
+  s2orig+='</div><div class="info-box" style="margin-top:.6rem">These are the raw input rules. NTs are uppercase; terminals are lowercase. '
+    +'The start symbol is <b>'+esc(sv)+'</b>. We now transform them to GNF step by step.</div>';
+  container.appendChild(makeStepCard(2,'Original CFG Rules',
+    'Display the parsed input grammar before any transformation. Each A\u2192\u03b1 rule will be systematically transformed into Greibach Normal Form (GNF).',
+    s2orig, 0.04));
+
+  // ── Step 3: Nullable set & ε-removal ──
+  var gnfResult=cfgToGNF(rules);
+  _gnfRules=gnfResult.gnf;
+
+  // Recompute nullable for display (same logic as inside cfgToGNF)
+  var nullableDisp=new Set();
+  var chg3=true;
+  while(chg3){chg3=false;
+    rules.forEach(function(r){
+      if(!nullableDisp.has(r.lhs)&&(r.rhs[0]==='\u03b5'||r.rhs.every(function(s){return nullableDisp.has(s);})))
+        {nullableDisp.add(r.lhs);chg3=true;}
+    });
+  }
+  var nullArr=[...nullableDisp];
+  var s3eps='<div class="info-box" style="margin-bottom:.5rem">'
+    +(nullArr.length?'Nullable non-terminals (can derive \u03b5): <b>{ '+esc(nullArr.join(', '))+' }</b>. '
+    +'For each rule, we enumerate all subsets of nullable symbols in the RHS to remove.<br>'
+    +(nullableDisp.has(sv)?'<br>\u26a0 Since start symbol <b>'+esc(sv)+'</b> is nullable, we keep <b>'+esc(sv)+' \u2192 \u03b5</b> in the grammar.':'')
+    :'No nullable non-terminals found — no \u03b5-productions to remove.')
+    +'</div>';
+  if(nullArr.length){
+    s3eps+='<div class="rules-grid">';
+    rules.forEach(function(r){
+      if(r.rhs[0]==='\u03b5') return; // skip direct eps rules
+      var nullIdx=r.rhs.map(function(s,i){return nullableDisp.has(s)?i:-1;}).filter(function(i){return i>=0;});
+      var total=1<<nullIdx.length;
+      for(var mask=0;mask<total;mask++){
+        var rhs=r.rhs.filter(function(s,idx){var ni=nullIdx.indexOf(idx);return ni<0||!((mask>>ni)&1);});
+        if(rhs.length>0){
+          s3eps+='<div class="rule-card" style="font-size:.75rem">'+renderProd(r.lhs,rhs.join(' '))
+            +(mask>0?'<span class="r-src">omit nullable</span>':'')+'</div>';
+        }
+      }
+    });
+    if(nullableDisp.has(sv)) s3eps+='<div class="rule-card">'+renderProd(sv,'\u03b5')+'<span class="r-src">start nullable</span></div>';
+    s3eps+='</div>';
+  }
+  container.appendChild(makeStepCard(3,'Step 1 of GNF: Remove \u03b5-Productions',
+    'Find all nullable non-terminals (those that can derive \u03b5). For every rule A\u2192\u03b1 where \u03b1 contains nullable symbols, add a new version with each nullable symbol optionally deleted. Remove the original \u03b5-rules (unless S is nullable).',
+    s3eps, 0.08));
+
+  // ── Step 4: Unit production removal ──
+  var s4unit='<div class="info-box" style="margin-bottom:.5rem">A <b>unit production</b> is A\u2192B where B is a single non-terminal. '
+    +'We replace each A\u2192B by copying all of B\u2019s rules into A, then remove A\u2192B. '
+    +'Repeat until no unit productions remain.</div>'
+    +'<div class="rules-grid">';
+  rules.forEach(function(r){
+    if(r.rhs.length===1&&NTs.has(r.rhs[0])){
+      s4unit+='<div class="rule-card" style="background:rgba(192,57,43,.05)">'+renderProd(r.lhs,r.rhs.join(' '))
+        +'<span class="r-src" style="color:var(--accent)">unit \u2014 removed</span></div>';
+    }
+  });
+  var unitFound=rules.some(function(r){return r.rhs.length===1&&NTs.has(r.rhs[0]);});
+  if(!unitFound) s4unit+='<div class="rule-card"><span style="color:var(--accent4);font-family:var(--mono);font-size:.75rem">\u2713 No unit productions found</span></div>';
+  s4unit+='</div>';
+  container.appendChild(makeStepCard(4,'Step 2 of GNF: Remove Unit Productions',
+    'A unit production A\u2192B (single non-terminal) is eliminated by replacing it with copies of all B-rules into A, then discarding the unit rule. This may need to be repeated iteratively.',
+    s4unit, 0.12));
+
+  // ── Step 5: Aux terminal variables (Step 3 of GNF) ──
+  var s5aux='<div class="info-box" style="margin-bottom:.5rem">GNF requires every rule to have the form <b>A \u2192 t \u03b1</b> where t is a terminal and \u03b1 is a (possibly empty) sequence of <em>non-terminals only</em>. '
+    +'For each terminal appearing at position \u22651 in a RHS, we introduce an auxiliary variable <b>A\u2081, A\u2082, \u2026</b> with rule <b>A\u1d62 \u2192 t</b>.</div>'
+    +'<div class="rules-grid">';
+  var auxEntries=Object.entries(gnfResult.termVar||{});
+  if(auxEntries.length){
+    auxEntries.forEach(function(kv){
+      s5aux+='<div class="rule-card">'+renderProd(kv[1],[kv[0]])
+        +'<span class="r-src">aux var for \u2018'+esc(kv[0])+'\u2019</span></div>';
+    });
+  } else {
+    s5aux+='<div class="rule-card"><span style="color:var(--accent4);font-family:var(--mono);font-size:.75rem">\u2713 No auxiliary terminal variables needed</span></div>';
+  }
+  s5aux+='</div>';
+  container.appendChild(makeStepCard(5,'Step 3 of GNF: Introduce Auxiliary Terminal Variables',
+    'Replace terminals appearing in non-first positions of rules with new auxiliary non-terminals A\u2081, A\u2082, \u2026 Each A\u1d62 has exactly one rule A\u1d62 \u2192 t. This ensures all positions after the first are non-terminals.',
+    s5aux, 0.14));
+
+  // ── Step 6: GNF result ──
+  var gnfHtml='<div style="display:flex;flex-direction:column;gap:.3rem">';
+  gnfResult.gnf.forEach(function(g,i){
+    var pushPart=g.vars.length?g.vars.join(' '):'\u03b5';
+    gnfHtml+='<div class="gnf-rule-row" style="animation:fadeIn .2s ease '+(i*.03)+'s both">'
+      +'<span class="gnf-nt">'+esc(g.lhs)+'</span>'
+      +'<span class="gnf-arr"> \u2192 </span>'
+      +'<span class="gnf-t">'+esc(g.terminal)+'</span>'
+      +(g.vars.length?'<span class="gnf-arr"> </span><span class="gnf-nt">'+esc(g.vars.join(' '))+'</span>':'')
+      +'<span style="font-family:var(--mono);font-size:.65rem;color:var(--rule2);margin-left:auto">t='+esc(g.terminal)+', \u03b1='+esc(pushPart)+'</span>'
+      +'</div>';
+  });
+  gnfHtml+='</div>';
+  if(gnfResult.gnf.length===0) gnfHtml='<div class="info-box">No GNF rules generated — grammar may be empty or only generate \u03b5.</div>';
+  container.appendChild(makeStepCard(6,'Step 4 of GNF: Final Greibach Normal Form',
+    'After \u03b5-removal, unit removal, auxiliary variable introduction, and left-recursion elimination: every rule has the form A \u2192 t \u03b1 where t is one terminal and \u03b1 is a (possibly empty) sequence of non-terminals. This is Greibach Normal Form.',
+    gnfHtml,0.18));
+
+  // ── Step 7: GNF → PDA transitions ──
+  var trs=gnfToPDA(sv,gnfResult.gnf,gnfResult.Ts);
+  _pdaTrans=trs;
+
+  var s3html='<div style="display:flex;flex-direction:column;gap:.5rem">';
+  // Init
+  s3html+='<div style="display:grid;grid-template-columns:auto 1fr;gap:.4rem;align-items:center;animation:fadeIn .2s ease 0s both">'
+    +'<div class="gnf-tag">INIT</div>'
+    +'<div class="tr-card" style="margin:0">'+trInline('q0','\u03b5','Z\u2080','q1',sv)+'</div></div>'
+    +'<div class="stack-vis" style="margin:.15rem 0 .15rem 1.2rem">'+stackHTML(['Z\u2080'],'Before')+'<div class="stk-arrow">\u2192</div>'+stackHTML([sv,'Z\u2080'],'After')+'</div>';
+
+  gnfResult.gnf.slice(0,12).forEach(function(g,i){
+    var pushStr=g.vars.length?g.vars.join(' '):'\u03b5';
+    var pushDisp=g.vars.length?g.vars.join(''):'\u03b5';
+    s3html+='<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.4rem;align-items:center;animation:fadeIn .2s ease '+(i*.04)+'s both">'
+      +'<div class="rule-card" style="margin:0"><span class="r-lhs">'+esc(g.lhs)+'</span><span class="r-arr"> \u2192 </span><span class="r-rhs"><span class="t">'+esc(g.terminal)+'</span>'+(g.vars.length?'<span class="nt">'+esc(g.vars.join(''))+'</span>':'<span class="ep">\u03b5</span>')+'</span></div>'
+      +'<div style="font-family:var(--mono);font-size:.85rem;color:var(--rule2)">\u21d2</div>'
+      +'<div class="tr-card" style="margin:0">'+trInline('q1',g.terminal,g.lhs,'q1',pushStr)+'</div></div>';
+  });
+  if(gnfResult.gnf.length>12) s3html+='<div style="font-family:var(--mono);font-size:.72rem;color:var(--rule2);padding:.2rem">&hellip; '+(gnfResult.gnf.length-12)+' more GNF rules</div>';
+  // Terminal match-and-pop transitions (one per terminal)
+  if(gnfResult.Ts&&gnfResult.Ts.size>0){
+    s3html+='<div style="margin:.5rem 0 .2rem;font-family:var(--mono);font-size:.67rem;color:var(--rule2);font-weight:700;letter-spacing:.06em;text-transform:uppercase">Terminal match-and-pop</div>';
+    [...gnfResult.Ts].sort().forEach(function(t,i){
+      s3html+='<div style="display:grid;grid-template-columns:auto 1fr;gap:.4rem;align-items:center;animation:fadeIn .2s ease '+(i*.03)+'s both">'
+        +'<div class="gnf-tag" style="background:rgba(160,64,0,.1);color:#a04000">MATCH</div>'
+        +'<div class="tr-card" style="margin:0">'+trInline('q1',t,t,'q1','\u03b5')+'</div></div>';
+    });
+  }
+  // Accept
+  s3html+='<div style="display:grid;grid-template-columns:auto 1fr;gap:.4rem;align-items:center;animation:fadeIn .2s ease '+(gnfResult.gnf.length*.04+.08)+'s both">'
+    +'<div class="gnf-tag" style="background:rgba(39,174,96,.1);color:var(--accent4)">ACCEPT</div>'
+    +'<div class="tr-card" style="margin:0">'+trInline('q1','\u03b5','Z\u2080','q2','\u03b5')+'</div></div>';
+  s3html+='</div>';
+  container.appendChild(makeStepCard(7,'GNF \u2192 PDA transitions (one terminal read per step)',
+    'Each GNF rule A \u2192 t B\u2081 B\u2082 \u2026 B\u2096 yields exactly one transition \u03b4(q1, t, A) = (q1, B\u2081 B\u2082 \u2026 B\u2096): read terminal t from input, pop A from stack, push the non-terminal suffix B\u2081\u2026B\u2096 (B\u2096 first so B\u2081 is on top). For A\u2192\u03b5: \u03b4(q1,\u03b5,A)=(q1,\u03b5) pops A silently. The accept transition \u03b4(q1,\u03b5,Z\u2080)=(q2,\u03b5) fires when the stack is fully consumed.',
+    s3html,0.12));
+
+  // Transition Table (with δ notation column)
+  var tbody=document.getElementById('cfg-tbody'); tbody.innerHTML='';
+  trs.forEach(function(t,i){
+    var row=document.createElement('tr');
+    if(t.isTerm) row.style.background='rgba(160,64,0,.04)';
+    row.innerHTML='<td style="color:var(--rule2)">'+(i+1)+'</td>'
+      +'<td class="td-st">'+esc(t.from)+'</td>'
+      +'<td class="td-in">'+esc(t.inp)+'</td>'
+      +'<td class="td-sk">'+esc(t.stk)+'</td>'
+      +'<td style="color:var(--rule2)">\u2192</td>'
+      +'<td class="td-nx">'+esc(t.to)+'</td>'
+      +'<td class="td-pu">'+esc(t.push)+'</td>'
+      +'<td style="font-family:var(--mono);font-size:.68rem;color:'+(t.isTerm?'#a04000':'#555')+'">'+esc(t.delta)+'</td>';
+    tbody.appendChild(row);
+  });
+
+  // GNF Table
+  var gnfTbody=document.getElementById('cfg-gnf-tbody'); gnfTbody.innerHTML='';
+  gnfResult.gnf.forEach(function(g,i){
+    var row=document.createElement('tr');
+    var pushDisp=g.vars.length?g.vars.join(' '):'\u03b5';
+    row.innerHTML='<td style="color:var(--rule2)">'+(i+1)+'</td>'
+      +'<td><span class="td-lhs">'+esc(g.lhs)+'</span> \u2192 <span style="color:#a04000">'+esc(g.terminal)+'</span>'+(g.vars.length?' <span class="td-lhs">'+esc(g.vars.join(' '))+'</span>':'')+'</td>'
+      +'<td style="font-family:var(--mono);font-size:.75rem;color:#a04000">'+esc(g.terminal)+'</td>'
+      +'<td style="font-family:var(--mono);font-size:.75rem;color:var(--cfg-col)">'+esc(pushDisp)+'</td>';
+    gnfTbody.appendChild(row);
+  });
+
+  // δ notation box in step output
+  var deltaHtml='<div class="delta-box" style="margin-top:.6rem">'
+    +'<div class="delta-box-hd">\u03b4 (delta) Notation</div>'
+    +'<div class="delta-rows">';
+  trs.forEach(function(t){
+    var pushDisp=t.push.replace(/ /g,'');
+    deltaHtml+='<div class="delta-line">'
+      +'<span class="delta-fn">\u03b4</span>(<span class="delta-state">'+esc(t.from)+'</span>'
+      +', <span class="delta-inp">'+esc(t.inp)+'</span>'
+      +', <span class="delta-stk">'+esc(t.stk)+'</span>)'
+      +' = (<span class="delta-state">'+esc(t.to)+'</span>, <span class="delta-push">'+esc(pushDisp)+'</span>)'
+      +'</div>';
+  });
+  deltaHtml+='</div></div>';
+  container.appendChild(makeStepCard(8,'\u03b4 Transition Function — Complete Listing',
+    'All transitions in \u03b4(state, input, stack-top) = (next-state, push) form. This is the formal definition of the resulting PDA.',
+    deltaHtml, 0.18));
+
+  // Grammar summary
+  var gramTbody=document.getElementById('cfg-gram-tbody'); gramTbody.innerHTML='';
+  document.getElementById('cfg-gram-count').textContent=rules.length+' rule'+(rules.length!==1?'s':'');
+  rules.forEach(function(r,i){
+    var row=document.createElement('tr');
+    var rhsCompact=r.rhs[0]==='\u03b5'?'\u03b5':r.rhs.join('');
+    row.innerHTML='<td style="color:var(--rule2)">'+(i+1)+'</td>'
+      +'<td style="font-size:.82rem">'+renderProd(r.lhs,rhsCompact)+'</td>';
+    gramTbody.appendChild(row);
+  });
+
+  drawGraph('cfg-svg', trs.map(function(t){return{from:t.from,to:t.to,inp:t.inp,stk:t.stk,push:t.push};}),
+    ['q0','q1','q2'],'q0',['q2']);
+
+  resetAnimation();
+  document.getElementById('cfg-empty').style.display='none';
+  document.getElementById('cfg-out').style.display='block';
+  document.getElementById('cfg-ok').style.display='inline-flex';
+}
+
+// ─── PDA EXAMPLES & INPUT ───
+// PDA examples: stack symbols are the actual input terminals
+var PDA_EX={
+  anbn:{st:'q0,q1,q2',sig:'a,b',gam:'a,Z0',init:'q0',istk:'Z0',fin:'q2',
+    rows:[['q0','a','Z0','q0','a Z0'],['q0','a','a','q0','a a'],['q0','b','a','q1','\u03b5'],['q1','b','a','q1','\u03b5'],['q1','\u03b5','Z0','q2','Z0']]},
+  wwr:{st:'q0,q1,q2',sig:'a,b',gam:'a,b,Z0',init:'q0',istk:'Z0',fin:'q2',
+    rows:[['q0','a','Z0','q0','a Z0'],['q0','a','a','q0','a a'],['q0','a','b','q0','a b'],['q0','b','Z0','q0','b Z0'],['q0','b','a','q0','b a'],['q0','b','b','q0','b b'],['q0','\u03b5','Z0','q1','Z0'],['q1','a','a','q1','\u03b5'],['q1','b','b','q1','\u03b5'],['q1','\u03b5','Z0','q2','Z0']]}
+};
+function loadPDA(k){
+  var e=PDA_EX[k];
+  document.getElementById('p-states').value=e.st;
+  document.getElementById('p-sigma').value=e.sig;
+  document.getElementById('p-gamma').value=e.gam;
+  document.getElementById('p-init').value=e.init;
+  document.getElementById('p-istk').value=e.istk;
+  document.getElementById('p-finals').value=e.fin;
+  document.getElementById('pda-rows').innerHTML='';
+  e.rows.forEach(function(r){addPDARow(r);});
+}
+function normEps(s){return (s==='eps'||s==='\u03b5'||!s)?'\u03b5':s;}
+
+function makePlusBtn(afterRowId){
+  var btn=document.createElement('div');
+  btn.className='insert-row-btn';
+  btn.setAttribute('data-after',afterRowId||'');
+  btn.innerHTML='<span>+</span>';
+  btn.onclick=function(){addPDARow(null,btn.getAttribute('data-after'));};
+  return btn;
+}
+
+function removePDARow(id){
+  var row=document.getElementById(id); if(!row) return;
+  var next=row.nextSibling;
+  if(next&&next.classList&&next.classList.contains('insert-row-btn')) next.remove();
+  row.remove();
+}
+
+function addPDARow(v, afterRowId){
+  var id='r'+Date.now()+Math.random().toString(36).slice(2,5);
+  var vals=v||['','','','',''];
+  var row=document.createElement('div');
+  row.className='tr-row'; row.id=id;
+  row.innerHTML='<input type="text" placeholder="q0" value="'+esc(vals[0])+'">'
+    +'<input type="text" placeholder="a / eps / &#949;" value="'+esc(vals[1])+'">'
+    +'<input type="text" placeholder="A" value="'+esc(vals[2])+'">'
+    +'<input type="text" placeholder="q1" value="'+esc(vals[3])+'">'
+    +'<input type="text" placeholder="BC / eps / &#949;" value="'+esc(vals[4])+'">'
+    +'<button class="del-btn" onclick="removePDARow(\''+id+'\')">\u00d7</button>';
+
+  var plusAfter=makePlusBtn(id);
+
+  var container=document.getElementById('pda-rows');
+  if(afterRowId){
+    var afterRow=document.getElementById(afterRowId);
+    if(afterRow){
+      var afterPlus=afterRow.nextSibling;
+      if(afterPlus&&afterPlus.classList&&afterPlus.classList.contains('insert-row-btn')){
+        container.insertBefore(plusAfter, afterPlus.nextSibling||null);
+        container.insertBefore(row, plusAfter);
+        afterPlus.setAttribute('data-after', id);
+        afterPlus.onclick=function(){addPDARow(null, id);};
+      } else {
+        container.insertBefore(row, afterPlus||null);
+        container.insertBefore(plusAfter, afterPlus||null);
+      }
+      return;
+    }
+  }
+  container.appendChild(row);
+  container.appendChild(plusAfter);
+}
+function getPDARows(){
+  return Array.from(document.querySelectorAll('#pda-rows .tr-row')).map(function(r){
+    var ins=r.querySelectorAll('input');
+    var inp=normEps(ins[1].value.trim());
+    var push=normEps(ins[4].value.trim());
+    return{state:ins[0].value.trim(),input:inp,stackTop:ins[2].value.trim(),nextState:ins[3].value.trim(),push:push};
+  }).filter(function(t){return t.state&&t.stackTop&&t.nextState;});
+}
+
+// ─── PDA → CFG ───
+function runPDAtoCFG(){
+  document.getElementById('pda-err').style.display='none';
+  var states=document.getElementById('p-states').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var initSt=document.getElementById('p-init').value.trim();
+  var initStk=document.getElementById('p-istk').value.trim();
+  var finals=document.getElementById('p-finals').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var sigmaRaw=document.getElementById('p-sigma').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var gammaRaw=document.getElementById('p-gamma').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var perr=function(m){showErr('pda-err',m);};
+
+  if(!states.length){perr('States field is empty. Enter comma-separated names like q0,q1,q2');return;}
+  for(var _si=0;_si<states.length;_si++){
+    if(!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(states[_si])){
+      perr('State name \u201c'+states[_si]+'\u201d is invalid. Use alphanumeric names like q0, q1.');return;
+    }
+  }
+  if(!initSt){perr('Initial state is empty. Enter a state name like q0.');return;}
+  if(!states.includes(initSt)){perr('Initial state \u201c'+initSt+'\u201d is not in the states list.');return;}
+  if(!initStk){perr('Initial stack symbol is empty. Enter a symbol like Z0.');return;}
+  if(gammaRaw.length&&!gammaRaw.includes(initStk)){
+    perr('Initial stack symbol \u201c'+initStk+'\u201d is not in \u0393. Add it to the Stack \u0393 field.');return;
+  }
+  if(!finals.length){perr('Accept states is empty. Enter at least one accept state.');return;}
+  for(var _fi=0;_fi<finals.length;_fi++){
+    if(!states.includes(finals[_fi])){perr('Accept state \u201c'+finals[_fi]+'\u201d is not in the states list.');return;}
+  }
+  if(!sigmaRaw.length){perr('Input alphabet \u03a3 is empty. Enter terminals like a,b');return;}
+  // Normalize eps in sigma
+  sigmaRaw=sigmaRaw.map(function(s){return normEps(s);});
+  for(var _ai=0;_ai<sigmaRaw.length;_ai++){
+    var _sym=sigmaRaw[_ai];
+    if(_sym==='\u03b5') continue; // eps allowed
+    if(!/^[a-z0-9]$/.test(_sym)){
+      perr('Terminal \u201c'+_sym+'\u201d in \u03a3 is invalid. Use single lowercase letters or digits (or eps/\u03b5 for epsilon).');return;
+    }
+  }
+
+  var trs=getPDARows();
+  if(!trs.length){perr('No transitions defined. Add at least one transition row.');return;}
+
+  for(var _ti=0;_ti<trs.length;_ti++){
+    var _tr=trs[_ti];
+    if(!states.includes(_tr.state)){
+      perr('Row '+(_ti+1)+': state \u201c'+_tr.state+'\u201d is not in the states list.');return;
+    }
+    if(!states.includes(_tr.nextState)){
+      perr('Row '+(_ti+1)+': next-state \u201c'+_tr.nextState+'\u201d is not in the states list.');return;
+    }
+    if(_tr.input!=='\u03b5'&&sigmaRaw.length&&!sigmaRaw.includes(_tr.input)){
+      perr('Row '+(_ti+1)+': input \u201c'+_tr.input+'\u201d is not in \u03a3={'+sigmaRaw.join(',')+'}.');return;
+    }
+    if(gammaRaw.length&&!gammaRaw.includes(_tr.stackTop)){
+      perr('Row '+(_ti+1)+': stack symbol \u201c'+_tr.stackTop+'\u201d is not in \u0393={'+gammaRaw.join(',')+'}.'); return;
+    }
+    if(_tr.push!=='\u03b5'){
+      var _psyms=_tr.push.split(' ').filter(Boolean);
+      for(var _pi=0;_pi<_psyms.length;_pi++){
+        if(gammaRaw.length&&!gammaRaw.includes(_psyms[_pi])){
+          perr('Row '+(_ti+1)+': push symbol \u201c'+_psyms[_pi]+'\u201d is not in \u0393={'+gammaRaw.join(',')+'}.'); return;
+        }
+      }
+    }
+  }
+
+  var prods=[]; // {lhs, rhs(string), src}
+  var container=document.getElementById('pda-steps'); container.innerHTML='';
+
+  // ── Step 1: Triple-variable scheme ──
+  var s1html='<div class="rules-grid">'
+    +'<div class="rule-card"><span class="r-lhs">[p, A, q]</span><span class="r-arr"> \u2261 </span><span class="r-rhs"><span class="t">"from p, A on stack top, consume to reach q"</span></span></div>'
+    +'<div class="rule-card">'+renderProd('S',states.map(function(q){return '['+initSt+','+initStk+','+q+']';}).join(' | '))+'</div>'
+    +'</div>';
+  container.appendChild(makeStepCard(1,'Triple-variable scheme',
+    'Each CFG variable is a triple [p,A,q] meaning "starting in state p with A on the stack, consume some input and reach state q with A gone." S derives ['+initSt+','+initStk+',q] for every q \u2208 Q.',
+    s1html,0));
+
+  // ── Step 2: Start productions ──
+  var startProds=[];
+  states.forEach(function(q){
+    var prod={lhs:'S',rhs:'['+initSt+','+initStk+','+q+']',src:'Start symbol'};
+    prods.push(prod); startProds.push(prod);
+  });
+  var s2html='<div class="rules-grid">';
+  startProds.forEach(function(p,i){
+    s2html+='<div class="rule-card" style="animation-delay:'+(i*.04)+'s">'+renderProd(p.lhs,p.rhs)+'<span class="r-src">'+esc(p.src)+'</span></div>';
+  });
+  s2html+='</div>';
+  container.appendChild(makeStepCard(2,'Start productions',
+    'S \u2192 ['+initSt+','+initStk+',q] for every state q \u2208 Q. This covers all possible ways the PDA can fully consume the initial stack configuration.',
+    s2html,0.06));
+
+  // ── Step 3: Rules from transitions ──
+  var trGroupsHTML='<div style="display:flex;flex-direction:column;gap:.8rem">';
+  var trGroupProds=[];
+  trs.forEach(function(tr,gi){
+    var p=tr.state,a=tr.input,A=tr.stackTop,r=tr.nextState,pushStr=tr.push;
+    var pushSyms=pushStr=='\u03b5'||!pushStr?[]:pushStr.split(/\s+/).filter(Boolean);
+    var groupProds=[];
+
+    if(pushSyms.length===0){
+      var rhs=a=='\u03b5'?'\u03b5':a;
+      var prod={lhs:'['+p+','+A+','+r+']',rhs:rhs,src:'\u03b4('+p+','+a+','+A+')=('+r+',\u03b5)'};
+      prods.push(prod); groupProds.push(prod);
+    } else if(pushSyms.length===1){
+      states.forEach(function(q){
+        var inner='['+r+','+pushSyms[0]+','+q+']';
+        var rhs=a=='\u03b5'?inner:a+inner;
+        var prod={lhs:'['+p+','+A+','+q+']',rhs:rhs,src:'\u03b4('+p+','+a+','+A+')=('+r+','+pushSyms[0]+')'};
+        prods.push(prod); groupProds.push(prod);
+      });
+    } else if(pushSyms.length===2){
+      states.forEach(function(q1){states.forEach(function(q2){
+        var inner='['+r+','+pushSyms[0]+','+q1+']['+q1+','+pushSyms[1]+','+q2+']';
+        var rhs=a=='\u03b5'?inner:a+inner;
+        var prod={lhs:'['+p+','+A+','+q2+']',rhs:rhs,src:'\u03b4('+p+','+a+','+A+')=('+r+','+pushSyms.join('')+')'};
+        prods.push(prod); groupProds.push(prod);
+      });});
+    } else {
+      var prod={lhs:'['+p+','+A+',...]',rhs:'...',src:'\u03b4('+p+','+a+','+A+')=('+r+','+pushSyms.join(' ')+')'};
+      prods.push(prod); groupProds.push(prod);
+    }
+    trGroupProds.push({tr:tr,prods:groupProds});
+
+    if(gi<5){ // show first 5 groups
+      if(gi>0){
+        trGroupsHTML+='<div style="display:flex;align-items:center;justify-content:center;margin:.2rem 0">'
+          +'<div style="font-family:var(--mono);font-size:1.2rem;font-weight:700;color:var(--rule2);line-height:1">+</div>'
+          +'</div>';
+      }
+      trGroupsHTML+='<div style="background:var(--paper2);border:1px solid var(--rule);border-radius:9px;overflow:hidden;animation:fadeIn .3s ease '+(gi*.07)+'s both">';
+      trGroupsHTML+='<div style="padding:.48rem .85rem;border-bottom:1px solid var(--rule);background:var(--paper3)">'
+        +'<div class="tr-card" style="border:none;background:transparent;padding:0">'+trInline(tr.state,tr.input,tr.stackTop,tr.nextState,tr.push)+'</div></div>';
+      trGroupsHTML+='<div style="padding:.55rem .85rem;display:flex;flex-direction:column;gap:.32rem">';
+      groupProds.slice(0,4).forEach(function(prod){
+        trGroupsHTML+='<div class="rule-card" style="border:none;background:var(--paper)">'+renderProd(prod.lhs,prod.rhs)+'</div>';
+      });
+      if(groupProds.length>4) trGroupsHTML+='<div style="font-family:var(--mono);font-size:.68rem;color:var(--rule2);padding:.1rem .3rem">\u2026 '+( groupProds.length-4)+' more</div>';
+      trGroupsHTML+='</div></div>';
+    }
+  });
+  if(trs.length>5) trGroupsHTML+='<div style="font-family:var(--mono);font-size:.73rem;color:var(--rule2);padding:.3rem">\u2026 '+(trs.length-5)+' more transition groups</div>';
+  trGroupsHTML+='</div>';
+  container.appendChild(makeStepCard(3,'Productions from each transition',
+    'For each \u03b4(p,a,A)=(r,\u03b3): generate CFG rules. Pop (\u03b3=\u03b5) gives 1 rule; push 1 symbol gives |Q| rules; push 2 symbols gives |Q|\u00b2 rules. Each rule shown below a transition in S\u2192\u03b1 notation.',
+    trGroupsHTML,0.12));
+
+  // ── Step 4: Summary ──
+  var uniqueVars=new Set(prods.filter(function(p){return p.rhs!='...';}).map(function(p){return p.lhs;})).size;
+  var totalProds=prods.filter(function(p){return p.rhs!='...';}).length;
+  var s4html='<div class="summary-grid">'
+    +'<div class="summary-cell"><div class="summary-big" style="color:var(--cfg-col)">'+uniqueVars+'</div><div class="summary-sub">CFG variables</div></div>'
+    +'<div class="summary-cell"><div class="summary-big" style="color:var(--pda-col)">'+totalProds+'</div><div class="summary-sub">productions</div></div>'
+    +'</div>'
+    +'<div class="info-box">\ud83d\udca1 Eliminate unreachable variables (not derivable from S) and useless variables (derive no terminal string) to produce a clean minimal CFG with the same language.</div>';
+  container.appendChild(makeStepCard(4,'Result & clean-up',
+    'The construction is complete. The grammar correctly recognises the same language as the PDA. Useless and unreachable variables can be removed to simplify the result.',
+    s4html,0.18));
+
+  // Table
+  var tbody=document.getElementById('pda-tbody'); tbody.innerHTML='';
+  prods.forEach(function(p,i){
+    if(p.rhs=='...') return;
+    var row=document.createElement('tr');
+    row.innerHTML='<td style="color:var(--rule2)">'+(i+1)+'</td>'
+      +'<td style="font-size:.78rem">'+renderProd(p.lhs,p.rhs)+'</td>'
+      +'<td style="font-family:var(--mono);font-size:.65rem;color:var(--rule2)">'+esc(p.src||'')+'</td>';
+    tbody.appendChild(row);
+  });
+
+  drawGraph('pda-svg', trs.map(function(t){return{from:t.state,to:t.nextState,inp:t.input,stk:t.stackTop,push:t.push};}),
+    states, initSt, finals);
+
+  document.getElementById('pda-empty').style.display='none';
+  document.getElementById('pda-out').style.display='block';
+  document.getElementById('pda-ok').style.display='inline-flex';
+}
+
+// ─── D3 GRAPH ─── improved layout with no overlapping
+function drawGraph(svgId, edges, stateList, initState, finalStates){
+  var svgEl=document.getElementById(svgId);
+  d3.select('#'+svgId).selectAll('*').remove();
+  var W=svgEl.getBoundingClientRect().width||680;
+  if(W<200) W=680;
+  var H=360;
+  svgEl.setAttribute('viewBox','0 0 '+W+' '+H);
+  var svg=d3.select('#'+svgId);
+  var uid=svgId.replace(/[-]/g,'_');
+  var n=stateList.length;
+  var R_NODE=28;
+
+  // defs
+  var defs=svg.append('defs');
+  defs.append('marker').attr('id','arr_'+uid)
+    .attr('viewBox','0 -4 10 8').attr('refX',R_NODE+10).attr('refY',0)
+    .attr('markerWidth',7).attr('markerHeight',7).attr('orient','auto')
+    .append('path').attr('d','M0,-4L10,0L0,4').attr('fill','#999');
+  defs.append('marker').attr('id','arr2_'+uid)
+    .attr('viewBox','0 -4 10 8').attr('refX',12).attr('refY',0)
+    .attr('markerWidth',7).attr('markerHeight',7).attr('orient','auto')
+    .append('path').attr('d','M0,-4L10,0L0,4').attr('fill','#999');
+  var glow=defs.append('filter').attr('id','gw_'+uid);
+  glow.append('feGaussianBlur').attr('stdDeviation','3').attr('result','cb');
+  var fm=glow.append('feMerge');
+  fm.append('feMergeNode').attr('in','cb');
+  fm.append('feMergeNode').attr('in','SourceGraphic');
+
+  // Node positions
+  var pos={};
+  var PAD=80, CX=W/2, CY=H/2;
+  if(n===1){
+    pos[stateList[0]]={x:CX,y:CY};
+  } else if(n===2){
+    pos[stateList[0]]={x:W*0.3,y:CY};
+    pos[stateList[1]]={x:W*0.7,y:CY};
+  } else if(n===3){
+    var gap=(W-2*PAD)/2;
+    pos[stateList[0]]={x:PAD,y:CY};
+    pos[stateList[1]]={x:PAD+gap,y:CY};
+    pos[stateList[2]]={x:PAD+2*gap,y:CY};
+  } else {
+    var r=Math.min(W,H)*0.32;
+    stateList.forEach(function(s,i){
+      var a=(2*Math.PI*i/n)-Math.PI/2;
+      pos[s]={x:CX+r*Math.cos(a),y:CY+r*Math.sin(a)};
+    });
+  }
+  stateList.forEach(function(s){
+    pos[s].x=Math.max(PAD,Math.min(W-PAD,pos[s].x));
+    pos[s].y=Math.max(PAD,Math.min(H-PAD,pos[s].y));
+  });
+
+  // Group edges
+  var edgeMap={};
+  edges.forEach(function(e){
+    var k=e.from+'__'+e.to;
+    if(!edgeMap[k]) edgeMap[k]={from:e.from,to:e.to,labels:[]};
+    edgeMap[k].labels.push(e.inp+','+e.stk+'/'+e.push);
+  });
+
+  // Layers: edge layer, label layer, node layer, init-arrow layer (on top)
+  var edgeG=svg.append('g').attr('class','edge-layer');
+  var labelG=svg.append('g').attr('class','label-layer');
+  var nodeG=svg.append('g').attr('class','node-layer');
+  var initG=svg.append('g').attr('class','init-layer'); // always on top
+
+  function redrawEdges(){
+    edgeG.selectAll('*').remove();
+    labelG.selectAll('*').remove();
+    Object.keys(edgeMap).forEach(function(k){
+      var ed=edgeMap[k];
+      var p1=pos[ed.from], p2=pos[ed.to];
+      if(!p1||!p2) return;
+      // Show ALL labels — no truncation
+      var allLabels=ed.labels;
+      var bidi=!!edgeMap[ed.to+'__'+ed.from];
+      if(ed.from===ed.to){
+        var lx=p1.x, ly=p1.y;
+        var path='M'+(lx-12)+','+(ly-R_NODE+2)
+          +' C'+(lx-55)+','+(ly-100)+' '+(lx+55)+','+(ly-100)+' '+(lx+12)+','+(ly-R_NODE+2);
+        edgeG.append('path').attr('class','edge-path').attr('d',path)
+          .attr('marker-end','url(#arr2_'+uid+')');
+        drawEdgeLabel(labelG,allLabels,lx,ly-115,true);
+      } else {
+        var dx=p2.x-p1.x, dy=p2.y-p1.y;
+        var len=Math.sqrt(dx*dx+dy*dy)||1;
+        var ux=dx/len, uy=dy/len;
+        var perp={x:-uy,y:ux};
+        var off=bidi?30:0;
+        var mx=(p1.x+p2.x)/2+perp.x*off;
+        var my=(p1.y+p2.y)/2+perp.y*off;
+        edgeG.append('path').attr('class','edge-path')
+          .attr('d','M'+p1.x+','+p1.y+' Q'+mx+','+my+' '+p2.x+','+p2.y)
+          .attr('marker-end','url(#arr_'+uid+')');
+        var lblX=(p1.x+p2.x)/2+perp.x*(off+16);
+        var lblY=(p1.y+p2.y)/2+perp.y*(off+16);
+        drawEdgeLabel(labelG,allLabels,lblX,lblY,false);
+      }
+    });
+  }
+
+  function redrawInitArrow(){
+    initG.selectAll('*').remove();
+    var ip=pos[initState];
+    if(!ip) return;
+    var arrowLen=52;
+    initG.append('line')
+      .attr('x1',ip.x-R_NODE-arrowLen).attr('y1',ip.y)
+      .attr('x2',ip.x-R_NODE-4).attr('y2',ip.y)
+      .attr('stroke','#3498db').attr('stroke-width',2)
+      .attr('marker-end','url(#arr_'+uid+')');
+    initG.append('text')
+      .attr('x',ip.x-R_NODE-arrowLen/2).attr('y',ip.y-8)
+      .attr('text-anchor','middle')
+      .attr('font-family','IBM Plex Mono,monospace').attr('font-size',8)
+      .attr('fill','rgba(52,152,219,.8)').text('start');
+  }
+
+  redrawEdges();
+  redrawInitArrow();
+
+  // Draw nodes
+  stateList.forEach(function(s){
+    var p=pos[s]; if(!p) return;
+    var isInit=s===initState;
+    var isFinal=finalStates.indexOf(s)>=0;
+    var ng=nodeG.append('g').attr('class','node-g').attr('transform','translate('+p.x+','+p.y+')');
+    ng.append('circle').attr('r',R_NODE)
+      .attr('fill',isInit&&isFinal?'#4a3800':isInit?'#1a3a5c':isFinal?'#1a4a2a':'#1e1e1e')
+      .attr('stroke',isFinal?'#27ae60':isInit?'#3498db':'#555')
+      .attr('stroke-width',2.5)
+      .attr('filter','url(#gw_'+uid+')');
+    if(isFinal){
+      ng.append('circle').attr('r',22).attr('fill','none')
+        .attr('stroke','rgba(39,174,96,.5)').attr('stroke-width',1.5).attr('stroke-dasharray','4,2');
+    }
+    ng.append('text').attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('fill','#f5f0e8').attr('font-size',9).attr('font-weight','600')
+      .attr('font-family','IBM Plex Mono,monospace').text(s);
+    var roleLabel=isInit&&isFinal?'start/acc':isInit?'start':isFinal?'accept':'';
+    if(roleLabel){
+      ng.append('text').attr('text-anchor','middle').attr('y',R_NODE+13)
+        .attr('fill',isFinal?'rgba(39,174,96,.8)':'rgba(52,152,219,.8)')
+        .attr('font-size',7.5).attr('font-family','IBM Plex Mono,monospace').text(roleLabel);
+    }
+    var tip=document.getElementById('tooltip');
+    ng.on('mouseover',function(ev){
+      tip.style.opacity='1';
+      tip.textContent=s+(isInit?' · initial':'')+(isFinal?' · accept':'');
+    }).on('mousemove',function(ev){
+      tip.style.left=(ev.clientX+12)+'px'; tip.style.top=(ev.clientY-8)+'px';
+    }).on('mouseout',function(){tip.style.opacity='0';});
+
+    // Draggable — redraw edges AND init arrow after drag
+    ng.call(d3.drag().on('drag',function(ev){
+      p.x=Math.max(PAD,Math.min(W-PAD,ev.x));
+      p.y=Math.max(PAD,Math.min(H-PAD,ev.y));
+      ng.attr('transform','translate('+p.x+','+p.y+')');
+      redrawEdges();
+      redrawInitArrow();  // ← init arrow now tracks dragged node
+    }));
+  });
+}
+
+// Draw edge labels — contracted by default for self-loops, expandable
+function drawEdgeLabel(g, labels, x, y, isSelfLoop){
+  if(!labels||!labels.length) return;
+  var lineH=11;
+
+  if(isSelfLoop && labels.length > 0){
+    // Contracted: show "n rules ···" badge, click to expand
+    var contracted=true;
+    var shortLabel=labels.length===1?labels[0]:(labels.length+' rules');
+    var bwC=Math.max(shortLabel.length*5.8+18, 40), bhC=lineH+10;
+
+    var grp=g.append('g').style('cursor','pointer');
+    var bgRect=grp.append('rect')
+      .attr('x',x-bwC/2).attr('y',y-bhC/2)
+      .attr('width',bwC).attr('height',bhC)
+      .attr('rx',4).attr('ry',4)
+      .attr('fill','#f5f0e8').attr('stroke','#a89f8c').attr('stroke-width',1.5);
+    var txt=grp.append('text')
+      .attr('class','edge-label')
+      .attr('x',x).attr('y',y)
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .text(labels.length===1?labels[0]:'··· '+labels.length+' ···');
+
+    // Three-dots indicator
+    if(labels.length>1){
+      grp.append('text').attr('x',x+bwC/2-5).attr('y',y)
+        .attr('text-anchor','end').attr('dominant-baseline','middle')
+        .attr('font-size',8).attr('fill','#a89f8c').text('\u25be');
+    }
+
+    grp.on('click',function(){
+      contracted=!contracted;
+      if(!contracted){
+        // Expanded: show all labels
+        var bwE=Math.max.apply(null,labels.map(function(p){return p.length*5.8+10;}));
+        bwE=Math.max(bwE+10,50);
+        var bhE=labels.length*lineH+10;
+        bgRect.attr('x',x-bwE/2).attr('y',y-bhE/2).attr('width',bwE).attr('height',bhE)
+          .attr('stroke','#c0392b');
+        txt.text('');
+        grp.selectAll('.exp-lbl').remove();
+        labels.forEach(function(lbl,i){
+          grp.append('text').attr('class','edge-label exp-lbl')
+            .attr('x',x).attr('y',y-(labels.length-1)*lineH/2+i*lineH)
+            .attr('text-anchor','middle').attr('dominant-baseline','middle')
+            .text(lbl);
+        });
+      } else {
+        // Back to contracted
+        var bwC2=Math.max(shortLabel.length*5.8+18,40), bhC2=lineH+10;
+        bgRect.attr('x',x-bwC2/2).attr('y',y-bhC2/2).attr('width',bwC2).attr('height',bhC2)
+          .attr('stroke','#a89f8c');
+        grp.selectAll('.exp-lbl').remove();
+        txt.text(labels.length===1?labels[0]:'··· '+labels.length+' ···');
+      }
+    });
+    return;
+  }
+
+  // Non-self-loop: show all labels normally
+  var parts=labels;
+  var maxLen=Math.max.apply(null,parts.map(function(p){return p.length;}));
+  var bw=Math.max(maxLen*5.8+10, 30), bh=parts.length*lineH+8;
+  g.append('rect')
+    .attr('x',x-bw/2).attr('y',y-bh/2)
+    .attr('width',bw).attr('height',bh)
+    .attr('rx',3).attr('ry',3)
+    .attr('fill','#f5f0e8').attr('stroke','#c8bfaa').attr('stroke-width',1)
+    .style('cursor','default');
+  parts.forEach(function(part,i){
+    g.append('text')
+      .attr('class','edge-label')
+      .attr('x',x).attr('y',y-(parts.length-1)*lineH/2+i*lineH)
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .text(part);
+  });
+}
+
+// ─── INIT ───
+window.addEventListener('DOMContentLoaded',function(){
+  loadCFG('anbn'); loadPDA('anbn');
+});
+</script>
+</body>
+</html>
